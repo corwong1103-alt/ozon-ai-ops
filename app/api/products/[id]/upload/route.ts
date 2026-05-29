@@ -3,6 +3,9 @@ import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadProductToOzon } from "@/lib/services/ozon";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const user = await requireApprovedUser();
   const body = await request.json();

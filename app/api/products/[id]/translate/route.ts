@@ -3,6 +3,9 @@ import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { runBaseTranslationTask } from "@/lib/services/ai";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function POST(_: Request, { params }: { params: { id: string } }) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: params.id, userId: user.id } });

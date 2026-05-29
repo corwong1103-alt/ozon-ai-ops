@@ -3,6 +3,9 @@ import { requireApprovedUser } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET() {
   const user = await requireApprovedUser();
   const stores = await prisma.store.findMany({

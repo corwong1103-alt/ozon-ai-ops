@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({
