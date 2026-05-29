@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: 20 24 33;
+  --paper: 247 248 251;
+  --rail: 235 238 244;
+  --line: 213 218 228;
+  --accent: 76 93 210;
+  --accent-2: 117 83 190;
+  --rust: 190 72 58;
+  --mint: 34 152 119;
+  --steel: 81 91 111;
+  --alert: 218 154 45;
+  --font-display: "Georgia";
+  --font-body: "Avenir Next";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: rgb(var(--paper));
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: rgb(var(--ink));
+  background: rgb(var(--paper));
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(var(--mint) / 0.45);
+  outline-offset: 2px;
+}
+
+.ledger-card {
+  border: 1px solid rgb(var(--line));
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 18px 42px rgb(20 24 33 / 0.06);
+}
+
+.field {
+  width: 100%;
+  border: 1px solid rgb(var(--line));
+  background: rgb(255 255 255 / 0.72);
+  padding: 0.75rem 0.85rem;
+  color: rgb(var(--ink));
+}
+
+.field::placeholder {
+  color: rgb(var(--steel) / 0.62);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(var(--accent));
+  border-radius: 8px;
+  background: rgb(var(--accent));
+  color: rgb(var(--paper));
+  padding: 0.78rem 1rem;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  background: rgb(var(--accent-2));
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.52);
+  color: rgb(var(--ink));
+  padding: 0.72rem 0.9rem;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.btn-secondary:hover {
+  border-color: rgb(var(--accent));
+  color: rgb(var(--accent));
+}
+
+.status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 99px;
+  display: inline-block;
+  background: rgb(var(--mint));
+}
+
+.stamp {
+  border: 1px solid rgb(var(--ink));
+  color: rgb(var(--ink));
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.24rem 0.42rem;
+  text-transform: uppercase;
+}
