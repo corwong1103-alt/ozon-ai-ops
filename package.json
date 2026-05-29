@@ -13,7 +13,6 @@
     "prisma:seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "@next/swc-darwin-arm64": "^14.2.33",
     "@prisma/client": "^5.22.0",
     "lucide-react": "^0.468.0",
     "next": "^14.2.16",
