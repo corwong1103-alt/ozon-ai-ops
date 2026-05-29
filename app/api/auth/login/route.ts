@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createSession, statusRedirect, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const body = await request.json();
   const email = String(body.email || "").trim().toLowerCase();
