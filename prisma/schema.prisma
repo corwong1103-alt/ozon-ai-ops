@@ -43,6 +43,7 @@ enum SocialPlatform {
   tiktok
   instagram
   vk
+  wibus
 }
 
 enum SocialAccountStatus {
@@ -60,6 +61,20 @@ enum SocialPostStatus {
   queued
   published
   failed
+}
+
+enum IntegrationProvider {
+  dashscope
+  ozon_market
+  source_1688
+  vk
+  wibus
+}
+
+enum IntegrationStatus {
+  configured
+  disconnected
+  error
 }
 
 enum CustomerMessageCategory {
@@ -112,6 +127,7 @@ model User {
   stores          Store[]
   products        Product[]
   taskLogs        TaskLog[]
+  integrations    ApiIntegration[]
   socialAccounts  SocialAccount[]
   socialPosts     SocialPost[]
   customerMessages CustomerMessage[]
@@ -122,6 +138,25 @@ model User {
 
   @@index([status])
   @@index([role])
+}
+
+model ApiIntegration {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        IntegrationProvider
+  status          IntegrationStatus   @default(configured)
+  accountLabel    String?
+  publicConfig    Json                @default("{}")
+  secretEncrypted String?
+  lastCheckedAt   DateTime?
+  lastMessage     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([provider])
 }
 
 model Session {

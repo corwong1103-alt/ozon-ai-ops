@@ -16,7 +16,9 @@ export async function GET(request: Request) {
       type: source,
       status: "success",
       creditCost: 0,
-      message: "搜索接口框架已接入，真实 Ozon/1688 数据源将在后续模块实现。"
+      message: source === "research"
+        ? "Ozon 真实调研请使用 /research/ozon 或店铺页同步，图片来自 Seller API。"
+        : "1688 真实采集待接入商品链接抓取或开放平台 API；不会返回 mock 商品图。"
     }
   });
 

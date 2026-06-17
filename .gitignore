@@ -7,3 +7,5 @@ dist
 coverage
 *.log
 *.tsbuildinfo
+.DS_Store
+.playwright-cli/

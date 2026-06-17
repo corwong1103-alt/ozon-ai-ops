@@ -12,7 +12,7 @@ Next.js + TypeScript + Tailwind CSS + PostgreSQL + Prisma SaaS foundation for a 
 - Admin-only user review page with approve, suspend, expire, plan, and expiry actions.
 - Middleware that blocks protected routes when no session cookie is present.
 - SaaS page framework for Dashboard, Ozon 店铺, Ozon 调研, 1688 采集, 商品池, AI额度, 社媒发布, 客服助手, 任务记录, 管理后台.
-- Phase 3 pages use real database reads/writes with local mock services; no third-party Ozon, 1688, AI, social, or customer-service API is called.
+- Phase 3 pages use real database reads/writes. AI text tasks can run through Alibaba Cloud Bailian/DashScope when configured, while Ozon, 1688, social publishing, and customer message sync still use local adapters until their platform APIs are connected.
 
 ## Stack
 
@@ -67,9 +67,17 @@ The current API routes use Prisma directly. The HTML demo remains as a static re
 DATABASE_URL="postgresql://postgres:postgres@localhost:5433/ozon_ai_ops?schema=public"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 OZON_API_KEY_ENCRYPTION_SECRET="replace-with-a-long-random-secret"
-AI_API_KEY=""
+AI_PROVIDER="mock"
+DASHSCOPE_API_KEY=""
+DASHSCOPE_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+QWEN_TEXT_MODEL="qwen3.6-plus"
+QWEN_FAST_MODEL="qwen3.6-flash"
+QWEN_IMAGE_MODEL="qwen-image-2.0-pro"
+QWEN_VIDEO_MODEL="happyhorse-1.0-t2v"
 OZON_API_BASE_URL=""
 ```
+
+Set `AI_PROVIDER="dashscope"` and fill `DASHSCOPE_API_KEY` to test Alibaba Cloud Bailian text, translation, and customer reply generation. See `docs/aliyun-hk-deployment.md` for the Aliyun Hong Kong ECS path.
 
 ## Auth And Permissions
 
@@ -83,12 +91,14 @@ OZON_API_BASE_URL=""
   - `approved` -> dashboard and module pages
 - Admin pages require `role = admin`.
 
-## Phase 3 Mock Interactions
+## Phase 3 Integrations
 
-- Ozon 调研 and 1688 采集 use `lib/services/mock-market.ts` for local search, filters, weekly/monthly hot products, sales sorting, and adding products to the database-backed product pool.
+- Ozon 调研 uses the connected Ozon Seller API and stores product images returned by `/v3/product/info/list`; it does not use generic placeholder images.
+- 1688 采集 is intentionally gated until a real 1688 product link crawler or authorized API is connected; it does not show mock products or replacement images.
 - 商品池 supports create, edit, translate, image text translation, AI product image, AI video, and mock upload to Ozon.
+- Translation, customer replies, and social copy use `lib/ai/provider.ts`; they run in mock mode by default and switch to Bailian/DashScope with environment variables.
 - AI商品图 consumes `imageCredits`; AI视频 consumes `videoCredits`; translation, upload, customer replies, and social image publishing cost `0`.
-- 社媒发布 supports mock TikTok / Instagram / VK authorization status, social copy generation, image publish, and AI video publish.
+- 社媒发布 supports VK / Wibus mock authorization status, social copy generation, image publish, and AI video publish.
 - 客服助手 supports mock Ozon messages, category labels, AI reply suggestions, and one-click reply.
 - All business actions write `TaskLog` with `creditCost`.
 

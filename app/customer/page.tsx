@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
+import { CustomerMessageButtons, SyncCustomerMessagesButton } from "@/components/CustomerActionControls";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateCustomerReply, sendCustomerReply, syncMockCustomerMessages } from "./actions";
 
 const categoryLabel: Record<string, string> = {
   presale: "售前咨询",
@@ -21,35 +21,34 @@ export default async function CustomerPage() {
   });
 
   return (
-    <AppShell title="客服助手" eyebrow="Customer Assistant" user={user}>
+    <AppShell title="多语言客服助手" eyebrow="Ozon Customer Desk" user={user}>
+      <section className="mb-5 ledger-card p-5">
+        <p className="text-xs font-bold text-accent">客服边界</p>
+        <h3 className="mt-2 font-display text-4xl">客服流程可测，真实建议等大模型</h3>
+        <p className="mt-3 max-w-4xl text-sm leading-6 text-steel">
+          现在可生成测试消息、分类、写任务日志和模拟发送；配置百炼 API Key 后，回复建议会切到真实大模型生成。
+        </p>
+      </section>
+
       <section className="ledger-card overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-line bg-rail/45 px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="relative flex flex-col gap-3 border-b border-line bg-rail/45 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="font-display text-3xl">Ozon 消息列表</h3>
-            <p className="mt-1 text-sm text-steel">AI回复建议、消息分类、差评/退款/库存提醒为基础功能，不消耗 AI额度。当前不接真实 Ozon 消息接口。</p>
+            <p className="mt-1 text-sm text-steel">用于测试客服流程：消息分类、AI回复建议、一键回复、任务记录。当前不读取真实 Ozon 买家消息。</p>
           </div>
-          <form action={syncMockCustomerMessages}>
-            <button className="btn-primary">同步 mock 消息</button>
-          </form>
+          <SyncCustomerMessagesButton />
         </div>
         {messages.length === 0 && <p className="p-5 text-sm text-steel">暂无客服消息。后续接入 Ozon 消息同步后显示。</p>}
         {messages.map((message) => (
-          <div key={message.id} className="grid gap-3 border-b border-line px-4 py-4 last:border-b-0 md:grid-cols-[1fr_160px_160px]">
+          <div key={message.id} className="relative grid gap-3 border-b border-line px-4 py-4 transition hover:bg-paper/45 last:border-b-0 md:grid-cols-[1fr_160px_160px]">
             <div>
               <strong>{message.customerName}</strong>
               <p className="mt-1 text-sm text-steel">{message.message}</p>
               <p className="mt-2 text-sm text-steel">建议回复：{message.suggestedReply ?? "待生成"}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <form action={generateCustomerReply.bind(null, message.id)}>
-                  <button className="btn-secondary px-3 py-2 text-xs">AI回复建议</button>
-                </form>
-                <form action={sendCustomerReply.bind(null, message.id)}>
-                  <button className="btn-primary px-3 py-2 text-xs">一键发送回复</button>
-                </form>
-              </div>
+              <CustomerMessageButtons messageId={message.id} />
             </div>
-            <span className="text-sm text-steel">{categoryLabel[message.category] ?? message.category}</span>
-            <span className="text-sm text-steel md:text-right">{message.status}</span>
+            <span className="text-sm font-semibold text-accent">{categoryLabel[message.category] ?? message.category}</span>
+            <span className="status-chip w-fit md:justify-self-end">{message.status}</span>
           </div>
         ))}
       </section>

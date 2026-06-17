@@ -1,0 +1,143 @@
+import { NextResponse } from "next/server";
+import { requireApprovedUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getOzonOrdersForImport, getOzonProductsForImport } from "@/lib/services/ozon";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+type SyncMode = "products" | "orders";
+
+const modes = new Set<SyncMode>(["products", "orders"]);
+
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const user = await requireApprovedUser();
+  const body = await request.json();
+  const mode = String(body.mode || "") as SyncMode;
+
+  if (!modes.has(mode)) {
+    return NextResponse.json({ error: "未知的 Ozon 同步类型。" }, { status: 400 });
+  }
+
+  const store = await prisma.store.findFirst({
+    where: {
+      id: params.id,
+      userId: user.id
+    }
+  });
+
+  if (!store) {
+    return NextResponse.json({ error: "店铺不存在或无权访问。" }, { status: 404 });
+  }
+
+  if (mode === "products") {
+    const products = await getOzonProductsForImport(store, 30);
+    let created = 0;
+    let updated = 0;
+
+    for (const item of products) {
+      const existing = await prisma.product.findFirst({
+        where: {
+          userId: user.id,
+          storeId: store.id,
+          source: "ozon",
+          description: {
+            contains: `Ozon Product ID: ${item.productId}`
+          }
+        }
+      });
+
+      const data = {
+        userId: user.id,
+        storeId: store.id,
+        source: "ozon" as const,
+        title: item.name,
+        description: [
+          `Ozon Product ID: ${item.productId}`,
+          `Offer ID: ${item.offerId}`,
+          `Currency: ${item.currency}`,
+          item.archived ? "Archived: yes" : "Archived: no",
+          "Image source: Ozon Seller API /v3/product/info/list"
+        ].join("\n"),
+        price: item.price,
+        images: item.images,
+        status: "draft" as const
+      };
+
+      if (existing) {
+        await prisma.product.update({
+          where: { id: existing.id },
+          data
+        });
+        updated += 1;
+      } else {
+        await prisma.product.create({ data });
+        created += 1;
+      }
+    }
+
+    await prisma.taskLog.create({
+      data: {
+        userId: user.id,
+        storeId: store.id,
+        type: "research",
+        status: "success",
+        creditCost: 0,
+        message: `Ozon 商品同步完成：新增 ${created}，更新 ${updated}。`,
+        metadata: {
+          mode,
+          total: products.length,
+          created,
+          updated,
+          sample: products.slice(0, 5).map((item) => ({
+            productId: item.productId,
+            offerId: item.offerId,
+            name: item.name,
+            price: item.price,
+            currency: item.currency,
+            imageCount: item.images.length
+          }))
+        }
+      }
+    });
+
+    return NextResponse.json({
+      result: {
+        ok: true,
+        mode,
+        total: products.length,
+        created,
+        updated,
+        summary: `商品池已同步：新增 ${created}，更新 ${updated}。`
+      }
+    });
+  }
+
+  const orders = await getOzonOrdersForImport(store, 30);
+  await prisma.taskLog.create({
+    data: {
+      userId: user.id,
+      storeId: store.id,
+      type: "collect",
+      status: "success",
+      creditCost: 0,
+      message: orders.length ? `Ozon 订单同步完成：近 30 天 ${orders.length} 条。` : "Ozon 订单同步完成：近 30 天暂无 FBS 订单。",
+      metadata: {
+        mode,
+        total: orders.length,
+        sample: orders.slice(0, 10)
+      }
+    }
+  });
+
+  return NextResponse.json({
+    result: {
+      ok: true,
+      mode,
+      total: orders.length,
+      created: orders.length,
+      updated: 0,
+      summary: orders.length ? `订单摘要已写入任务记录：${orders.length} 条。` : "近 30 天暂无 FBS 订单，已写入任务记录。"
+    }
+  });
+}

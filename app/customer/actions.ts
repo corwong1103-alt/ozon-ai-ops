@@ -2,15 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireApprovedUser } from "@/lib/auth";
+import { generateText } from "@/lib/ai/provider";
+import { buildCustomerReplyPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/prisma";
-
-const replies: Record<string, string> = {
-  presale: "您好，这款商品适合日常使用和礼品场景，详情页中会标注关键参数。",
-  logistics: "您好，我们已收到您的物流咨询，会优先核对包裹轨迹并及时反馈。",
-  refund: "您好，我们会根据 Ozon 平台售后规则协助处理退款申请。",
-  review_alert: "您好，非常抱歉给您带来不便，我们会尽快核实问题并提供解决方案。",
-  inventory_alert: "系统提醒：建议检查库存并及时补货，避免影响店铺评分。"
-};
 
 export async function syncMockCustomerMessages() {
   const user = await requireApprovedUser();
@@ -50,17 +44,31 @@ export async function syncMockCustomerMessages() {
   });
 
   revalidatePath("/customer");
+  return {
+    ok: true,
+    message: "客服测试消息已生成。"
+  };
 }
 
 export async function generateCustomerReply(messageId: string) {
   const user = await requireApprovedUser();
   const message = await prisma.customerMessage.findFirst({ where: { id: messageId, userId: user.id } });
-  if (!message) return;
+  if (!message) return { ok: false, message: "未找到客服消息，无法生成回复建议。" };
 
   await prisma.customerMessage.update({
     where: { id: message.id },
     data: {
-      suggestedReply: replies[message.category] ?? "您好，我们已收到您的消息，会尽快处理。",
+      suggestedReply: await generateText({
+        userId: user.id,
+        messages: [
+          { role: "system", content: "你是可靠克制的跨境电商客服助手。" },
+          { role: "user", content: buildCustomerReplyPrompt({
+            customerName: message.customerName,
+            message: message.message,
+            category: message.category
+          }) }
+        ]
+      }),
       status: "suggested"
     }
   });
@@ -76,12 +84,16 @@ export async function generateCustomerReply(messageId: string) {
   });
 
   revalidatePath("/customer");
+  return {
+    ok: true,
+    message: `已生成客服回复建议：${message.customerName}`
+  };
 }
 
 export async function sendCustomerReply(messageId: string) {
   const user = await requireApprovedUser();
   const message = await prisma.customerMessage.findFirst({ where: { id: messageId, userId: user.id } });
-  if (!message) return;
+  if (!message) return { ok: false, message: "未找到客服消息，无法发送回复。" };
 
   await prisma.customerMessage.update({
     where: { id: message.id },
@@ -99,4 +111,8 @@ export async function sendCustomerReply(messageId: string) {
   });
 
   revalidatePath("/customer");
+  return {
+    ok: true,
+    message: `已模拟发送客服回复：${message.customerName}`
+  };
 }

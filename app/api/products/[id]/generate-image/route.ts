@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApprovedUser } from "@/lib/auth";
+import { buildProductImagePrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/prisma";
 import { runCreditAiTask } from "@/lib/services/ai";
 
@@ -19,6 +20,11 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
     productId: product.id,
     kind: "image",
     message: `AI 商品图生成完成：${product.title}`,
+    prompt: buildProductImagePrompt({
+      title: product.title,
+      description: product.description,
+      price: product.price.toString()
+    }),
     onSuccess: () => prisma.product.update({
       where: { id: product.id },
       data: { status: "image_generated" }

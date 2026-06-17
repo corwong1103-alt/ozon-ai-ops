@@ -8,6 +8,12 @@ import { prisma } from "@/lib/prisma";
 export const SESSION_COOKIE = "ozon_ops_session";
 const SESSION_DAYS = 30;
 
+function shouldUseSecureCookie() {
+  const appUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+  if (appUrl) return appUrl.startsWith("https://");
+  return process.env.NODE_ENV === "production";
+}
+
 export function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
@@ -42,7 +48,7 @@ export async function createSession(userId: string) {
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     expires: expiresAt
   });

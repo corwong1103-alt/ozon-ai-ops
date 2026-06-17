@@ -3,36 +3,191 @@
 import { revalidatePath } from "next/cache";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getMockProduct } from "@/lib/services/mock-market";
+import type { OzonMarketProduct } from "@/lib/services/ozon-market";
+import { getOzonProductsForImport, type OzonProductImport } from "@/lib/services/ozon";
 
-export async function addMockProductToPool(productId: string) {
+function ozonProductDescription(product: OzonProductImport) {
+  return [
+    `Ozon Product ID: ${product.productId}`,
+    `Offer ID: ${product.offerId}`,
+    `Currency: ${product.currency}`,
+    product.archived ? "Archived: yes" : "Archived: no",
+    "Image source: Ozon Seller API /v3/product/info/list"
+  ].join("\n");
+}
+
+export async function addOzonProductToPool(productId: string, storeId: string) {
   const user = await requireApprovedUser();
-  const mockProduct = getMockProduct(productId);
-  if (!mockProduct) return;
-
-  const product = await prisma.product.create({
-    data: {
-      userId: user.id,
-      source: mockProduct.source,
-      title: mockProduct.title,
-      description: mockProduct.description,
-      price: mockProduct.price,
-      images: mockProduct.images,
-      status: "draft"
+  const store = await prisma.store.findFirst({
+    where: {
+      id: storeId,
+      userId: user.id
     }
   });
+
+  if (!store) {
+    return {
+      ok: false,
+      message: "入池失败：没有找到当前 Ozon 店铺，请先确认店铺绑定状态。"
+    };
+  }
+
+  const products = await getOzonProductsForImport(store, 50);
+  const ozonProduct = products.find((product) => String(product.productId) === productId);
+
+  if (!ozonProduct) {
+    await prisma.taskLog.create({
+      data: {
+        userId: user.id,
+        storeId: store.id,
+        type: "research",
+        status: "failed",
+        creditCost: 0,
+        message: `Ozon 商品入池失败：API 未返回 Product ID ${productId}。`
+      }
+    });
+    revalidatePath("/tasks");
+    return {
+      ok: false,
+      message: `入池失败：Ozon API 未返回 Product ID ${productId}，请刷新调研结果后再试。`
+    };
+  }
+
+  const existing = await prisma.product.findFirst({
+    where: {
+      userId: user.id,
+      storeId: store.id,
+      source: "ozon",
+      description: {
+        contains: `Ozon Product ID: ${ozonProduct.productId}`
+      }
+    }
+  });
+  const data = {
+    userId: user.id,
+    storeId: store.id,
+    source: "ozon" as const,
+    title: ozonProduct.name,
+    description: ozonProductDescription(ozonProduct),
+    price: ozonProduct.price,
+    images: ozonProduct.images,
+    status: "draft" as const
+  };
+  const product = existing
+    ? await prisma.product.update({ where: { id: existing.id }, data })
+    : await prisma.product.create({ data });
 
   await prisma.taskLog.create({
     data: {
       userId: user.id,
+      storeId: store.id,
       productId: product.id,
-      type: mockProduct.source === "ozon" ? "research" : "collect",
+      type: "research",
       status: "success",
       creditCost: 0,
-      message: `已将 mock 商品加入商品池：${mockProduct.title}`
+      message: `已将 Ozon 真实 API 商品加入商品池：${ozonProduct.name}`,
+      metadata: {
+        source: "ozon_seller_api",
+        endpoint: "/v3/product/info/list",
+        productId: ozonProduct.productId,
+        offerId: ozonProduct.offerId,
+        imageCount: ozonProduct.images.length
+      }
     }
   });
 
   revalidatePath("/products");
+  revalidatePath("/research/ozon");
   revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    message: existing
+      ? `商品已更新入池：${ozonProduct.name}`
+      : `商品已成功入池：${ozonProduct.name}`
+  };
+}
+
+function ozonMarketProductDescription(product: OzonMarketProduct) {
+  return [
+    `Ozon Market Product ID: ${product.productId}`,
+    product.sourceUrl ? `Source URL: ${product.sourceUrl}` : "",
+    product.category ? `Category: ${product.category}` : "",
+    product.sellerName ? `Seller: ${product.sellerName}` : "",
+    product.salesRank ? `Market Rank: ${product.salesRank}` : "",
+    product.rating ? `Rating: ${product.rating}` : "",
+    product.reviewCount ? `Reviews: ${product.reviewCount}` : "",
+    "Image source: Ozon market data provider / real returned image links"
+  ].filter(Boolean).join("\n");
+}
+
+export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
+  const user = await requireApprovedUser();
+
+  if (!product.productId || !product.name) {
+    return {
+      ok: false,
+      message: "入池失败：市场数据源没有返回商品 ID 或标题。"
+    };
+  }
+
+  if (!product.images.length) {
+    return {
+      ok: false,
+      message: "入池失败：这个市场商品没有真实图片链接，不能进入商品池。"
+    };
+  }
+
+  const existing = await prisma.product.findFirst({
+    where: {
+      userId: user.id,
+      source: "ozon",
+      description: {
+        contains: `Ozon Market Product ID: ${product.productId}`
+      }
+    }
+  });
+  const data = {
+    userId: user.id,
+    source: "ozon" as const,
+    title: product.name,
+    description: ozonMarketProductDescription(product),
+    price: product.price,
+    images: product.images,
+    status: "draft" as const
+  };
+  const pooledProduct = existing
+    ? await prisma.product.update({ where: { id: existing.id }, data })
+    : await prisma.product.create({ data });
+
+  await prisma.taskLog.create({
+    data: {
+      userId: user.id,
+      productId: pooledProduct.id,
+      type: "research",
+      status: "success",
+      creditCost: 0,
+      message: `已将 Ozon 市场商品加入商品池：${product.name}`,
+      metadata: {
+        source: "ozon_market",
+        productId: product.productId,
+        sourceUrl: product.sourceUrl,
+        imageCount: product.images.length,
+        salesRank: product.salesRank,
+        rating: product.rating,
+        reviewCount: product.reviewCount
+      }
+    }
+  });
+
+  revalidatePath("/products");
+  revalidatePath("/research/ozon");
+  revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    message: existing
+      ? `市场商品已更新入池：${product.name}`
+      : `市场商品已成功入池：${product.name}`
+  };
 }

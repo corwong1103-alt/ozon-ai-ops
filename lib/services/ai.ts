@@ -1,6 +1,8 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { generateImage, generateVideo } from "@/lib/ai/provider";
 
 type AiKind = "image" | "video";
 
@@ -13,6 +15,11 @@ const taskType = {
   image: "image",
   video: "video"
 } as const;
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue | undefined {
+  if (!value) return undefined;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 export async function runBaseTranslationTask(input: {
   userId: string;
@@ -36,6 +43,7 @@ export async function runCreditAiTask(input: {
   productId?: string;
   kind: AiKind;
   message: string;
+  prompt?: string;
   onSuccess?: () => Promise<unknown>;
 }) {
   const field = creditField[input.kind];
@@ -75,11 +83,18 @@ export async function runCreditAiTask(input: {
   });
 
   try {
-    // External AI providers will be called here with process.env.AI_API_KEY.
+    const aiResult = input.prompt
+      ? input.kind === "image"
+        ? await generateImage({ prompt: input.prompt, userId: input.userId })
+        : await generateVideo({ prompt: input.prompt, userId: input.userId })
+      : null;
     await input.onSuccess?.();
     return prisma.taskLog.update({
       where: { id: task.id },
-      data: { status: "success" }
+      data: {
+        status: "success",
+        metadata: toJsonValue(aiResult)
+      }
     });
   } catch (error) {
     await prisma.aiCredits.update({

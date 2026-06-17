@@ -1,0 +1,9 @@
+.next
+node_modules
+npm-debug.log
+.env
+.env.local
+.env.production
+.git
+docs/codex-chat-transcript-2026-05-25.md
+ozon-mvp-demo.html

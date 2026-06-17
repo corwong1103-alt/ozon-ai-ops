@@ -115,7 +115,7 @@ async function main() {
       title: "316 不锈钢智能温显保温杯",
       description: "带温度显示，适合通勤、户外和礼品场景。",
       price: 29.8,
-      images: ["https://example.com/mock-bottle.jpg"],
+      images: [],
       status: "draft"
     },
     create: {
@@ -126,23 +126,23 @@ async function main() {
       title: "316 不锈钢智能温显保温杯",
       description: "带温度显示，适合通勤、户外和礼品场景。",
       price: 29.8,
-      images: ["https://example.com/mock-bottle.jpg"],
+      images: [],
       status: "draft"
     }
   });
 
-  for (const platform of ["tiktok", "instagram", "vk"]) {
+  for (const platform of ["vk", "wibus"]) {
     await prisma.socialAccount.upsert({
       where: { userId_platform: { userId: operator.id, platform } },
       update: {
-        status: platform === "instagram" ? "disconnected" : "connected",
-        accountName: platform === "instagram" ? null : `@ozon_${platform}_demo`
+        status: "connected",
+        accountName: `@ozon_${platform}_demo`
       },
       create: {
         userId: operator.id,
         platform,
-        status: platform === "instagram" ? "disconnected" : "connected",
-        accountName: platform === "instagram" ? null : `@ozon_${platform}_demo`
+        status: "connected",
+        accountName: `@ozon_${platform}_demo`
       }
     });
   }
