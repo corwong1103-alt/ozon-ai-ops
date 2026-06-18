@@ -161,12 +161,37 @@ export async function translateProduct(productId: string) {
   };
 }
 
+export async function addToProductPool(productId: string) {
+  const user = await requireApprovedUser();
+  const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
+  if (!product) return { ok: false, message: "未找到商品，无法入池。" };
+  if (!["discovered", "favorited"].includes(product.status)) {
+    return { ok: false, message: "当前商品状态不需要加入商品池。" };
+  }
+
+  await prisma.product.update({ where: { id: product.id }, data: { status: "in_product_center" } });
+  await prisma.taskLog.create({
+    data: {
+      userId: user.id,
+      productId: product.id,
+      type: "research",
+      status: "success",
+      creditCost: 0,
+      message: `商品已加入商品中心：${product.title}`
+    }
+  });
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "商品已加入商品中心，可开始 AI 优化。" };
+}
+
 export async function optimizeProductMainFlow(productId: string) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
   if (!product) return { ok: false, message: "未找到商品，无法开始 AI 优化。" };
-  if (!["in_product_center", "favorited", "discovered", "optimizing"].includes(product.status)) {
-    return { ok: false, message: "当前商品状态不需要重新开始 AI 优化。" };
+  if (!["in_product_center", "optimizing"].includes(product.status)) {
+    return { ok: false, message: "只有商品中心内的商品可以开始 AI 优化。" };
   }
 
   await prisma.product.update({ where: { id: product.id }, data: { status: "optimizing" } });

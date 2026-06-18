@@ -1,3 +1,8 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { AlertCircle, CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 
 type UserForShell = {
@@ -7,80 +12,146 @@ type UserForShell = {
   plan: string;
 };
 
+type CollectedProduct = {
+  id: string;
+  title: string;
+  image: string;
+  sku: string;
+  skus: Array<{ skuId: string; price: number; stock?: number; attributes: Record<string, string> }>;
+  price: number;
+  attributes: Array<{ key: string; value: string }>;
+  productUrl: string;
+};
+
 export function Source1688CollectorGuide({ user }: { user: UserForShell }) {
+  const [source, setSource] = useState<"ozon" | "1688">("1688");
+  const [productUrl, setProductUrl] = useState("");
+  const [result, setResult] = useState<CollectedProduct | null>(null);
+  const [sourceProductId, setSourceProductId] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function collectProduct() {
+    const trimmed = productUrl.trim();
+    if (!trimmed || pending || source !== "1688") return;
+    setError("");
+    setResult(null);
+    setSourceProductId("");
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/sources/1688/collect", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ productUrl: trimmed })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data?.error || "1688 商品采集失败。");
+        }
+        setResult(data.product);
+        setSourceProductId(data.sourceProductId || "");
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "1688 商品采集失败。");
+      }
+    });
+  }
+
   return (
-    <AppShell title="1688 采集" eyebrow="1688 Source Collector" user={user}>
+    <AppShell title="商品采集" eyebrow="Source Collector" user={user}>
       <section className="relative overflow-hidden rounded-[28px] border border-line bg-cotton p-5 shadow-sm">
         <div className="absolute right-0 top-0 h-36 w-36 border-l border-line bg-[linear-gradient(135deg,rgba(177,107,44,0.18),transparent)]" />
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">真实商品图规则</p>
-        <h3 className="mt-2 font-display text-4xl">1688 暂不展示替代图</h3>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">真实数据源</p>
+        <h3 className="mt-2 font-display text-4xl">Ozon / 1688 商品采集</h3>
         <p className="mt-3 max-w-4xl text-sm leading-6 text-steel">
-          你刚才这个要求是对的：1688 采集回来的图必须来自真实 1688 商品链接或 1688 授权 API。当前系统还没有接入真实 1688 数据源，所以这里不会再显示 mock 商品、Unsplash 图或 Ozon 图冒充 1688 图。
+          1688 采集只调用阿里开放平台 OpenAPI。未配置真实 App Key、App Secret、Access Token 时会直接报错，不返回 mock 或占位商品。
         </p>
       </section>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
+      <div className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="ledger-card p-5">
-          <h3 className="font-display text-3xl">下一步接入方式</h3>
-          <div className="mt-5 grid gap-3">
-            <div className="readiness-card">
-              <p className="text-sm font-bold text-ink">方式 A：真实 1688 商品链接采集</p>
-              <p className="mt-2 text-sm leading-6 text-steel">
-                你提供 1688 商品详情页链接，系统抓取页面内主图/标题/价格。能否自动抓取取决于 1688 登录态和反爬限制，稳定后再写入商品池。
-              </p>
-            </div>
-            <div className="readiness-card">
-              <p className="text-sm font-bold text-ink">方式 B：1688 / 阿里开放平台 API</p>
-              <p className="mt-2 text-sm leading-6 text-steel">
-                接入正式授权 API 后，商品标题、价格、SKU 和图片 URL 都从接口返回，适合后续外部测试和批量采集。
-              </p>
-            </div>
-            <div className="readiness-card">
-              <p className="text-sm font-bold text-ink">方式 C：手动入池，但必须填真实来源图</p>
-              <p className="mt-2 text-sm leading-6 text-steel">
-                如果先手工测试，可以到商品池新增商品，但图片 URL 必须是供应商商品页里的真实图片链接；系统不会再帮你补通用占位图。
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="ledger-card p-5">
-          <h3 className="font-display text-3xl">真实采集入口预留</h3>
-          <p className="mt-2 text-sm leading-6 text-steel">
-            这个输入框先作为接入位置展示。等你确认采用“链接采集”还是“开放平台 API”，我再把这里接成真实采集按钮。
-          </p>
+          <h3 className="font-display text-3xl">开始采集</h3>
           <div className="mt-5 space-y-4">
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold">1688 商品链接</span>
-              <input className="field" placeholder="https://detail.1688.com/offer/..." disabled />
+              <span className="mb-2 block text-sm font-semibold">数据源</span>
+              <select className="field" value={source} onChange={(event) => setSource(event.target.value as "ozon" | "1688")}>
+                <option value="ozon">Ozon</option>
+                <option value="1688">1688</option>
+              </select>
             </label>
-            <button className="btn-primary w-full opacity-60" disabled>
-              等待真实 1688 数据源接入
-            </button>
+
+            {source === "ozon" ? (
+              <div className="rounded-xl border border-line bg-rail p-4 text-sm leading-6 text-steel">
+                Ozon 商品采集已在市场研究页运行。
+                <Link href="/research/ozon" className="ml-2 inline-flex items-center gap-1 font-semibold text-accent underline">
+                  前往 Ozon 市场研究 <ExternalLink size={13} />
+                </Link>
+              </div>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold">1688 商品链接</span>
+                  <input
+                    className="field"
+                    value={productUrl}
+                    onChange={(event) => setProductUrl(event.target.value)}
+                    placeholder="https://detail.1688.com/offer/779353832297.html"
+                  />
+                </label>
+                <button className="btn-primary w-full" onClick={collectProduct} disabled={!productUrl.trim() || pending}>
+                  {pending ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
+                  {pending ? "采集中…" : "开始采集"}
+                </button>
+              </>
+            )}
           </div>
-          <div className="mt-5 border border-line bg-rail p-4 text-sm leading-6 text-steel">
-            验真标准：商品池里的 1688 图片必须能追溯到对应商品链接/API 返回值；如果抓不到图，就显示“无图/未接入”，不使用替代图。
-          </div>
+          {error && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+        </section>
+
+        <section className="ledger-card p-5">
+          <h3 className="font-display text-3xl">采集结果</h3>
+          {!result ? (
+            <div className="mt-5 rounded-xl border border-dashed border-line p-10 text-center text-sm text-steel">
+              采集成功后会展示标题、主图、SKU、价格和属性，并写入 source_products。
+            </div>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="flex gap-4">
+                {result.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={result.image} alt={result.title} className="h-28 w-28 rounded-xl border border-line object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="grid h-28 w-28 place-items-center rounded-xl border border-line text-steel">无主图</div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-steel">SourceProduct: {sourceProductId}</p>
+                  <h4 className="mt-1 line-clamp-3 text-lg font-semibold text-ink">{result.title}</h4>
+                  <p className="mt-2 text-sm text-steel">SKU: {result.sku || "—"}</p>
+                  <p className="text-sm text-steel">价格: {result.price > 0 ? "¥" + result.price.toFixed(2) : "—"}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-line bg-rail p-4">
+                <p className="text-sm font-semibold text-ink">属性</p>
+                <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+                  {result.attributes.length ? result.attributes.map((item, index) => (
+                    <div key={index} className="rounded-lg bg-white px-3 py-2">
+                      <span className="font-medium text-ink">{item.key || "属性"}</span>
+                      <span className="ml-2 text-steel">{item.value || "—"}</span>
+                    </div>
+                  )) : <p className="text-steel">OpenAPI 未返回属性。</p>}
+                </div>
+              </div>
+              <a href={result.productUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-accent underline">
+                查看 1688 原商品 <ExternalLink size={13} />
+              </a>
+            </div>
+          )}
         </section>
       </div>
-
-      <section className="mt-5 rounded-[28px] border border-line bg-rail/70 p-5">
-        <h3 className="font-display text-3xl">现在能测什么</h3>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="module-card">
-            <p className="text-sm font-bold text-ink">能测</p>
-            <p className="mt-2 text-sm leading-6 text-steel">Ozon 真实商品同步、商品池预览、VK/Wibus mock 发布、客服测试消息、任务记录。</p>
-          </div>
-          <div className="module-card">
-            <p className="text-sm font-bold text-ink">待接</p>
-            <p className="mt-2 text-sm leading-6 text-steel">1688 真实采集，需要商品链接抓取方案或开放平台/API 权限。</p>
-          </div>
-          <div className="module-card">
-            <p className="text-sm font-bold text-ink">不做</p>
-            <p className="mt-2 text-sm leading-6 text-steel">不再用普通图库、Ozon 图或本地 mock 图伪装成 1688 商品图。</p>
-          </div>
-        </div>
-      </section>
     </AppShell>
   );
 }

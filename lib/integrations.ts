@@ -60,15 +60,14 @@ export const integrationDefinitions: IntegrationDefinition[] = [
     provider: "source_1688",
     name: "1688 / 阿里开放平台",
     shortName: "1688",
-    description: "用于真实采集 1688 商品标题、价格、SKU 和商品主图链接。",
-    secretLabel: "App Secret / Access Token",
-    secretPlaceholder: "1688 开放平台密钥或授权 Token",
-    help: "如果先做链接采集，可先填写 App Key 和采集模式；如果走开放平台 API，再补 App Secret/Token。",
+    description: "用于通过 1688 OpenAPI 采集商品标题、主图、SKU、价格和属性。",
+    secretLabel: "App Secret",
+    secretPlaceholder: "1688 开放平台 App Secret",
+    help: "填写 1688 开放平台 App Key、App Secret、Access Token 和 Refresh Token。系统只调用真实 OpenAPI，不返回假数据。",
     fields: [
-      { name: "appKey", label: "App Key", placeholder: "开放平台 App Key" },
-      { name: "apiBaseUrl", label: "API Base URL", placeholder: "https://gw.open.1688.com/openapi/..." },
-      { name: "collectorMode", label: "采集模式", placeholder: "link / openapi", required: true },
-      { name: "callbackUrl", label: "回调地址", placeholder: "https://你的域名/api/integrations/1688/callback" }
+      { name: "appKey", label: "App Key", placeholder: "开放平台 App Key", required: true },
+      { name: "accessToken", label: "Access Token", placeholder: "授权 Access Token", required: true },
+      { name: "refreshToken", label: "Refresh Token", placeholder: "授权 Refresh Token" }
     ]
   },
   {

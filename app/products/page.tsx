@@ -8,7 +8,7 @@ import { getProductStage, productStatusLabel } from "@/lib/product-lifecycle";
 import { getProductNextAction, PRODUCT_SOURCE_FILTERS, productSourceFilterLabel, type ProductSourceFilterKey } from "@/lib/product-main-flow";
 import { createProduct } from "./actions";
 
-const POOLED_STATUSES = ["in_product_center", "optimizing", "optimized", "ready_to_publish", "published", "promoted"] as const;
+const POOLED_STATUSES = ["discovered", "in_product_center", "optimizing", "optimized", "ready_to_publish", "published", "promoted"] as const;
 
 function readDescriptionValue(description: string, label: string) {
   const line = description
@@ -64,7 +64,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
   const total = products.length;
   const ozonCount = products.filter((product) => product.source === "ozon" || product.source === "ozon_market").length;
   const imageReadyCount = products.filter((product) => imageList(product.images).length > 0).length;
-  const draftCount = products.filter((product) => ["favorited", "in_product_center"].includes(product.status)).length;
+  const draftCount = products.filter((product) => ["discovered", "favorited", "in_product_center"].includes(product.status)).length;
 
   return (
     <AppShell title="商品池" eyebrow="真实货盘" user={user}>

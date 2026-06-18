@@ -3,6 +3,7 @@
 import { useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  addToProductPool,
   confirmProductReady,
   generatePromotionDraft,
   generateProductImage,
@@ -133,7 +134,11 @@ export function ProductPrimaryAction({
   const action = getProductNextAction(status, productId);
 
   function execute() {
-    if (action.intent === "optimize" || action.intent === "pool" || action.intent === "progress") {
+    if (action.intent === "pool") {
+      run(() => addToProductPool(productId));
+      return;
+    }
+    if (action.intent === "optimize" || action.intent === "progress") {
       run(() => optimizeProductMainFlow(productId));
       return;
     }

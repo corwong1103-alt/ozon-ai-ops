@@ -29,8 +29,9 @@ export function getProductNextAction(status: string, productId: string): Product
   switch (status as ProductStatus) {
     case "discovered":
       return { label: "加入商品池", href, intent: "pool" };
-    case "in_product_center":
     case "favorited":
+      return { label: "加入商品中心", href, intent: "pool" };
+    case "in_product_center":
       return { label: "开始 AI 优化", href, intent: "optimize" };
     case "optimizing":
       return { label: "查看优化进度", href, intent: "progress" };

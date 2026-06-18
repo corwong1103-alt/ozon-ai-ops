@@ -58,7 +58,7 @@ export default async function DashboardPage() {
     prisma.product.findMany({
       where: {
         userId: user.id,
-        status: { in: ["in_product_center", "optimizing", "optimized", "ready_to_publish"] }
+        status: { in: ["discovered", "in_product_center", "optimizing", "optimized", "ready_to_publish"] }
       },
       orderBy: { updatedAt: "desc" },
       take: 18
@@ -78,7 +78,7 @@ export default async function DashboardPage() {
     { label: "已发布", value: publishedCount, href: "/content", icon: Rocket, hint: "可生成推广内容" }
   ];
 
-  const pendingProducts = taskProducts.filter((product) => product.status === "in_product_center" || product.status === "favorited");
+  const pendingProducts = taskProducts.filter((product) => product.status === "discovered" || product.status === "in_product_center" || product.status === "favorited");
   const optimizingProducts = taskProducts.filter((product) => product.status === "optimizing");
   const readyProducts = taskProducts.filter((product) => product.status === "optimized" || product.status === "ready_to_publish");
 

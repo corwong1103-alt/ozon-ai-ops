@@ -1,23 +1,68 @@
 import { Database } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireAdminUser } from "@/lib/auth";
+import { readPublicConfig } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+
+function sourceStatus(input: {
+  secretEncrypted?: string | null;
+  publicConfig?: unknown;
+  status?: string;
+  lastCheckedAt?: Date | null;
+  requiredFields?: string[];
+}) {
+  const publicConfig = readPublicConfig(input.publicConfig as never);
+  const hasRequiredPublicFields = (input.requiredFields || []).every((field) => Boolean(publicConfig[field]));
+  const configured = Boolean(input.secretEncrypted) && hasRequiredPublicFields;
+  if (!configured) return "未配置";
+  if (input.status === "error") return "异常";
+  if (input.lastCheckedAt && input.status === "configured") return "在线";
+  return "已配置";
+}
 
 export default async function AdminDatasourcesPage() {
   const user = await requireAdminUser();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [ozonCalls, ozonFailed, total1688, totalWb] = await Promise.all([
+  const [ozonCalls, ozonFailed, total1688, totalWb, ozonMarketIntegration, source1688Integration] = await Promise.all([
     prisma.taskLog.count({ where: { type: "research" } }),
     prisma.taskLog.count({ where: { type: "research", status: "failed" } }),
     prisma.taskLog.count({ where: { type: "collect" } }),
-    0
+    0,
+    prisma.apiIntegration.findFirst({ where: { provider: "ozon_market" }, orderBy: { updatedAt: "desc" } }),
+    prisma.apiIntegration.findFirst({ where: { provider: "source_1688" }, orderBy: { updatedAt: "desc" } })
   ]);
 
   const sources = [
-    { name: "Ozon", provider: "Apify Ozon Scraper PRO", status: "在线", calls: ozonCalls, failed: ozonFailed, failRate: ozonCalls ? `${Math.round((ozonFailed / ozonCalls) * 100)}%` : "0%" },
-    { name: "1688", provider: "阿里开放平台（待接入）", status: "筹备中", calls: total1688, failed: 0, failRate: "—" },
+    {
+      name: "Ozon",
+      provider: "Apify Ozon Scraper PRO",
+      status: sourceStatus({
+        secretEncrypted: ozonMarketIntegration?.secretEncrypted,
+        publicConfig: ozonMarketIntegration?.publicConfig,
+        status: ozonMarketIntegration?.status,
+        lastCheckedAt: ozonMarketIntegration?.lastCheckedAt,
+        requiredFields: ["actorId"]
+      }),
+      calls: ozonCalls,
+      failed: ozonFailed,
+      failRate: ozonCalls ? Math.round((ozonFailed / ozonCalls) * 100) + "%" : "0%"
+    },
+    {
+      name: "1688",
+      provider: "阿里开放平台 OpenAPI",
+      status: sourceStatus({
+        secretEncrypted: source1688Integration?.secretEncrypted,
+        publicConfig: source1688Integration?.publicConfig,
+        status: source1688Integration?.status,
+        lastCheckedAt: source1688Integration?.lastCheckedAt,
+        requiredFields: ["appKey", "accessToken"]
+      }),
+      calls: total1688,
+      failed: 0,
+      failRate: "—"
+    },
     { name: "Wildberries", provider: "待接入", status: "筹备中", calls: totalWb, failed: 0, failRate: "—" }
   ];
 

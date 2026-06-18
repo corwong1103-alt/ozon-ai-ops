@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 
 // 内联归一化逻辑做单元测试（与 lib/apify/1688.ts 保持一致，纯函数验证）
 // 复制核心归一化函数以避免 ESM server-only 阻断。
@@ -197,4 +198,37 @@ test("parseOzonListing extracts JSON from model output with or without code fenc
   const broken = parseOzonListing("这不是 JSON");
   assert.equal(broken.titleRu, "");
   assert.equal(broken.attributes.length, 0);
+});
+
+function extract1688OfferId(urlOrId) {
+  const value = urlOrId.trim();
+  if (/^\d{6,}$/.test(value)) return value;
+  return (
+    value.match(/offer\/(\d{6,})/i)?.[1] ||
+    value.match(/[?&](?:offerId|offerid|productID|productId)=(\d{6,})/i)?.[1] ||
+    value.match(/(\d{8,})/)?.[1] ||
+    ""
+  );
+}
+
+function sign1688OpenApiRequest(path, params, appSecret) {
+  const payload = Object.keys(params)
+    .sort()
+    .reduce((acc, key) => acc + key + params[key], path);
+  return createHmac("sha1", appSecret).update(payload, "utf8").digest("hex").toUpperCase();
+}
+
+test("extract1688OfferId supports detail URLs, mobile URLs, query params, and raw ids", () => {
+  assert.equal(extract1688OfferId("779353832297"), "779353832297");
+  assert.equal(extract1688OfferId("https://detail.1688.com/offer/779353832297.html"), "779353832297");
+  assert.equal(extract1688OfferId("http://detail.m.1688.com/page/index.html?offerId=779353832297&skuId=6056766594892"), "779353832297");
+  assert.equal(extract1688OfferId("https://example.com/no-offer"), "");
+});
+
+test("sign1688OpenApiRequest is stable regardless of input parameter order", () => {
+  const path = "/param2/1/com.alibaba.product/alibaba.product.get/app-key";
+  const a = sign1688OpenApiRequest(path, { productID: "779353832297", webSite: "1688", access_token: "token" }, "secret");
+  const b = sign1688OpenApiRequest(path, { webSite: "1688", access_token: "token", productID: "779353832297" }, "secret");
+  assert.equal(a, b);
+  assert.match(a, /^[A-F0-9]{40}$/);
 });
