@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Bot,
   Boxes,
   ClipboardList,
@@ -20,18 +21,17 @@ export type NavItem = {
   icon: typeof Gauge;
 };
 
-// V3 Seller 后台菜单（含 1688 采集入口）
+// V4 Seller 后台菜单：Research Center 统领选品
 export const sellerNavItems: NavItem[] = [
   { href: "/dashboard", label: "首页", icon: Gauge },
-  { href: "/research/ozon", label: "市场研究", icon: Search },
-  { href: "/dashboard/sources/1688", label: "1688 采集", icon: PackageSearch },
+  { href: "/research", label: "Research Center", icon: Search },
   { href: "/products", label: "商品中心", icon: Boxes },
   { href: "/content", label: "内容中心", icon: Megaphone },
   { href: "/stores", label: "店铺中心", icon: Store },
   { href: "/membership", label: "会员中心", icon: Coins }
 ];
 
-// V3 Admin 后台菜单（7 项）
+// V4 Admin 后台菜单（7 项，不变）
 export const adminNavItems: NavItem[] = [
   { href: "/admin", label: "控制台", icon: Gauge },
   { href: "/admin/customers", label: "客户管理", icon: Users },
@@ -42,5 +42,5 @@ export const adminNavItems: NavItem[] = [
   { href: "/admin/settings", label: "系统设置", icon: Settings }
 ];
 
-// 兼容旧引用（逐步迁移）
+// 兼容旧引用
 export const mainNavItems = sellerNavItems;
