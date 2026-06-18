@@ -25,6 +25,8 @@ export function FactoryWorkbench({ product }: { product: Product }) {
   const router = useRouter();
   const { toast } = useToast();
   const images = imageList(product.images);
+  const referenceImage = images.length > 0 ? images[0] : "";
+  const [currentImgIdx, setCurrentImgIdx] = useState(0);
 
   const [activePanel, setActivePanel] = useState<"copy" | "image" | "infer" | "batch">("copy");
   const [title, setTitle] = useState(product.title);
@@ -97,7 +99,27 @@ export function FactoryWorkbench({ product }: { product: Product }) {
           </div>
 
           {images.length > 0 ? (
-            <ReliableProductImage images={images} alt={title} className="mb-3 aspect-square w-full rounded-lg object-cover" emptyLabel="无图" />
+            <div>
+              <div className="relative">
+                <ReliableProductImage images={[images[currentImgIdx]]} alt={title} className="mb-3 aspect-square w-full rounded-lg object-cover" emptyLabel="无图" />
+                {images.length > 1 && (
+                  <>
+                    <button onClick={() => setCurrentImgIdx(i => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 grid h-7 w-7 place-items-center rounded-full bg-white/80 shadow">‹</button>
+                    <button onClick={() => setCurrentImgIdx(i => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 grid h-7 w-7 place-items-center rounded-full bg-white/80 shadow">›</button>
+                  </>
+                )}
+                <span className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">{currentImgIdx + 1}/{images.length}</span>
+              </div>
+              {images.length > 1 && (
+                <div className="flex gap-1 overflow-x-auto pb-1">
+                  {images.slice(0, 8).map((img, i) => (
+                    <button key={i} onClick={() => setCurrentImgIdx(i)} className={`h-12 w-12 shrink-0 rounded-md border-2 overflow-hidden ${i === currentImgIdx ? "border-accent" : "border-transparent"}`}>
+                      <img src={img} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="mb-3 flex aspect-square w-full items-center justify-center rounded-lg bg-rail/60 text-xs text-steel">无图片</div>
           )}
@@ -218,31 +240,31 @@ export function FactoryWorkbench({ product }: { product: Product }) {
             <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><ImageIcon size={15} className="text-accent" />AI 图片处理</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_optimize", { mode: "image", prompt: `优化这张电商产品图，保持原商品不变，优化背景和光线：${title}` });
+                const data = await callAi("img_optimize", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n优化这张电商产品图，保持原商品不变，优化背景和光线：${title}` });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_optimize"}>
                 <ImageIcon size={13} /> 原图优化
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_bg", { mode: "image", prompt: `替换这张产品图的背景为纯白色电商背景，保持产品清晰：${title}` });
+                const data = await callAi("img_bg", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n替换这张产品图的背景为纯白色电商背景，保持产品清晰：${title}` });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_bg"}>
                 <ImageIcon size={13} /> 背景替换
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_model", { mode: "image", prompt: `生成一张俄罗斯模特展示${title}的电商图，自然光线，专业摄影` });
+                const data = await callAi("img_model", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张俄罗斯模特展示${title}的电商图，自然光线，专业摄影` });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_model"}>
                 <ImageIcon size={13} /> AI 模特图
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_scene", { mode: "image", prompt: `生成一张${title}的场景使用图，居家环境，柔和光线` });
+                const data = await callAi("img_scene", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张${title}的场景使用图，居家环境，柔和光线` });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_scene"}>
                 <ImageIcon size={13} /> AI 场景图
               </button>
               <button className="btn-secondary text-xs sm:col-span-2" onClick={async () => {
-                const data = await callAi("img_main", { mode: "image", prompt: `重新生成一张 Ozon 电商主图：${title}` });
+                const data = await callAi("img_main", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n重新生成一张 Ozon 电商主图：${title}` });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_main"}>
                 <ImageIcon size={13} /> 重新生成主图
@@ -274,13 +296,25 @@ export function FactoryWorkbench({ product }: { product: Product }) {
           <div className="space-y-3 rounded-xl border border-clay bg-white p-5">
             <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Wand2 size={15} className="text-accent" />图片反推 Prompt</h3>
             <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-steel">上传参考图片 URL</label>
-                <input className="field" placeholder="https://..." value={inferImageUrl} onChange={(e) => setInferImageUrl(e.target.value)} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-clay bg-rail/40 p-3">
+                  <label className="mb-1 block text-xs font-semibold text-steel">方式一：外部图片 URL</label>
+                  <input className="field text-xs" placeholder="https://..." value={inferImageUrl} onChange={(e) => setInferImageUrl(e.target.value)} />
+                </div>
+                <div className="rounded-lg border border-clay bg-rail/40 p-3">
+                  <label className="mb-1 block text-xs font-semibold text-steel">方式二：使用商品原图</label>
+                  <select className="field text-xs" onChange={(e) => { const v = e.target.value; if (v) setInferImageUrl(v); }}>
+                    <option value="">选择商品图片...</option>
+                    {images.map((img, i) => (
+                      <option key={i} value={img}>图 {i + 1} — {img.slice(0, 50)}...</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <button className="btn-primary text-xs" onClick={async () => {
-                if (!inferImageUrl) { toast("error", "请先输入图片 URL"); return; }
-                const data = await callAi("infer", { mode: "text", prompt: `分析这张电商产品图，生成可用于 AI 生图的中文 Prompt：图片URL=${inferImageUrl}。商品信息：${title}` });
+                if (!inferImageUrl) { toast("error", "请先输入图片 URL 或选择商品原图"); return; }
+                const ref = images.includes(inferImageUrl) ? `商品原图（第${images.indexOf(inferImageUrl)+1}张）` : inferImageUrl;
+                const data = await callAi("infer", { mode: "text", prompt: `分析这张电商产品图，生成可用于 AI 生图的中文 Prompt。参考图：${ref}。商品信息：${title}` });
                 if (data?.text) setInferredPrompt(data.text);
               }} disabled={loading === "infer"}>
                 <Wand2 size={13} /> 生成 Prompt

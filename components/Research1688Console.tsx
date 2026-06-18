@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Grid3X3, List, Search, TrendingUp, DollarSign, Filter } from "lucide-react";
 import { ReliableProductImage } from "@/components/ReliableProductImage";
@@ -26,15 +26,26 @@ export function Research1688Console() {
   const router = useRouter();
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("card");
-  const [searchKeyword, setSearchKeyword] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState(() => {
+    if (typeof window !== "undefined") return sessionStorage.getItem("rc_search") || "";
+    return "";
+  });
   const [sortMode, setSortMode] = useState<SortMode>("sales");
   const [timeRange, setTimeRange] = useState<TimeRange>("30d");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(sessionStorage.getItem("rc_products") || "[]"); } catch { return []; }
+    }
+    return [];
+  });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => { sessionStorage.setItem("rc_search", searchKeyword); }, [searchKeyword]);
+  useEffect(() => { sessionStorage.setItem("rc_products", JSON.stringify(products)); }, [products]);
 
   const toggleProduct = useCallback((id: string) => {
     setSelected((prev) => {
@@ -57,10 +68,11 @@ export function Research1688Console() {
     if (!searchKeyword.trim()) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ keyword: searchKeyword, sort: sortMode });
-      if (minPrice) params.set("minPrice", minPrice);
-      if (maxPrice) params.set("maxPrice", maxPrice);
-      const res = await fetch(`/api/sources/1688/search?${params}`);
+      const res = await fetch("/api/sources/1688/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: searchKeyword }),
+      });
       const data = await res.json();
       if (data.products) setProducts(data.products);
     } catch {
@@ -68,7 +80,7 @@ export function Research1688Console() {
     } finally {
       setLoading(false);
     }
-  }, [searchKeyword, sortMode, minPrice, maxPrice, toast]);
+  }, [searchKeyword, toast]);
 
   const handleImport = useCallback(async () => {
     if (selected.size === 0) return;

@@ -10,7 +10,8 @@ export default async function StoresPage() {
   const [stores, readyCount, publishedCount] = await Promise.all([
     prisma.store.findMany({
       where: { userId: user.id },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      distinct: ["ozonStoreId"]
     }),
     prisma.product.count({ where: { userId: user.id, status: { in: ["ready_to_publish", "optimized"] } } }),
     prisma.product.count({ where: { userId: user.id, status: "published" } })
