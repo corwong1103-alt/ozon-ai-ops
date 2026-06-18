@@ -2,9 +2,12 @@ import {
   BarChart3,
   Bot,
   Boxes,
+  CheckCircle2,
   ClipboardList,
   Coins,
   Database,
+  Factory,
+  FileText,
   Gauge,
   KeyRound,
   Megaphone,
@@ -21,14 +24,14 @@ export type NavItem = {
   icon: typeof Gauge;
 };
 
-// V4 Seller 后台菜单：Research Center 统领选品
+// V5 Seller 菜单：围绕卖家工作流（选品→商品工厂→已发布）
 export const sellerNavItems: NavItem[] = [
   { href: "/dashboard", label: "首页", icon: Gauge },
-  { href: "/research", label: "Research Center", icon: Search },
-  { href: "/products", label: "商品中心", icon: Boxes },
-  { href: "/content", label: "内容中心", icon: Megaphone },
-  { href: "/stores", label: "店铺中心", icon: Store },
-  { href: "/membership", label: "会员中心", icon: Coins }
+  { href: "/research", label: "选品中心", icon: Search },
+  { href: "/factory", label: "商品工厂", icon: Factory },
+  { href: "/published", label: "已发布商品", icon: CheckCircle2 },
+  { href: "/stores", label: "店铺管理", icon: Store },
+  { href: "/membership", label: "账户中心", icon: Coins }
 ];
 
 // V4 Admin 后台菜单（7 项，不变）
