@@ -40,6 +40,11 @@ export default async function OzonResearchPage({ searchParams }: { searchParams:
     }
     // 用 AI 翻译后的俄语词搜索（更准），降级用原词
     const searchKeyword = keywordExpansion?.translatedRu || keyword;
+    console.info("[market_search_keywords]", JSON.stringify({
+      originalKeyword: keyword,
+      expandedKeywords: keywordExpansion?.keywords.map((item) => item.keyword) || [keyword],
+      marketSource: "Apify Ozon Market"
+    }));
 
     const resolved = await resolveMarketSearchForPage({
       userId: user.id,
@@ -53,6 +58,9 @@ export default async function OzonResearchPage({ searchParams }: { searchParams:
     } else if (resolved.mode === "task_pending") {
       pendingTaskId = resolved.taskId;
       marketMessage = resolved.message;
+    } else if (resolved.mode === "market_error") {
+      marketMode = "error";
+      marketMessage = `${resolved.code}: ${resolved.message}`;
     } else {
       marketMode = "unconfigured";
       marketMessage = resolved.message;

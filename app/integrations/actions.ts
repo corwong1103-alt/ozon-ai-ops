@@ -64,6 +64,7 @@ export async function saveIntegration(provider: string, formData: FormData) {
   });
 
   revalidatePath("/integrations");
+  revalidatePath("/research/ozon");
   revalidatePath("/dashboard");
   revalidatePath("/credits");
   revalidatePath("/social");

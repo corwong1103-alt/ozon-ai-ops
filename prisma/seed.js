@@ -111,6 +111,39 @@ async function main() {
     }
   });
 
+  const ozonMarketPublicConfig = {
+    actorId: process.env.APIFY_ACTOR_ID || "zen-studio/ozon-scraper-pro",
+    maxItems: "20"
+  };
+  for (const user of [admin, operator, seller]) {
+    const apifyToken = process.env.APIFY_TOKEN || "";
+    await prisma.apiIntegration.upsert({
+      where: { userId_provider: { userId: user.id, provider: "ozon_market" } },
+      update: {
+        accountLabel: "Apify Ozon Market",
+        publicConfig: ozonMarketPublicConfig,
+        ...(apifyToken ? { secretEncrypted: encryptSecret(apifyToken) } : {}),
+        status: apifyToken ? "configured" : "disconnected",
+        lastCheckedAt: new Date(),
+        lastMessage: apifyToken
+          ? "Seed 已从 APIFY_TOKEN 映射市场调研数据源。"
+          : "Seed 已创建 Ozon Market 配置入口；缺少 APIFY_TOKEN，需填写后才能真实调研。"
+      },
+      create: {
+        userId: user.id,
+        provider: "ozon_market",
+        accountLabel: "Apify Ozon Market",
+        publicConfig: ozonMarketPublicConfig,
+        secretEncrypted: apifyToken ? encryptSecret(apifyToken) : null,
+        status: apifyToken ? "configured" : "disconnected",
+        lastCheckedAt: new Date(),
+        lastMessage: apifyToken
+          ? "Seed 已从 APIFY_TOKEN 映射市场调研数据源。"
+          : "Seed 已创建 Ozon Market 配置入口；缺少 APIFY_TOKEN，需填写后才能真实调研。"
+      }
+    });
+  }
+
   const store = await prisma.store.upsert({
     where: { id: "seed_store_growth" },
     update: {
@@ -136,10 +169,11 @@ async function main() {
       userId: operator.id,
       storeId: store.id,
       title: "316 不锈钢智能温显保温杯",
-      description: "带温度显示，适合通勤、户外和礼品场景。",
+      description: "[DEMO] 带温度显示，适合通勤、户外和礼品场景。",
+      currency: "CNY",
       price: 29.8,
       images: [],
-      status: "discovered"
+      status: "in_product_center"
     },
     create: {
       id: "seed_product_bottle",
@@ -147,10 +181,11 @@ async function main() {
       storeId: store.id,
       source: "manual",
       title: "316 不锈钢智能温显保温杯",
-      description: "带温度显示，适合通勤、户外和礼品场景。",
+      description: "[DEMO] 带温度显示，适合通勤、户外和礼品场景。",
+      currency: "CNY",
       price: 29.8,
       images: [],
-      status: "discovered"
+      status: "in_product_center"
     }
   });
 

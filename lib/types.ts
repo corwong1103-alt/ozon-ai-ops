@@ -32,7 +32,20 @@ export interface Product {
   description: string;
   price: number;
   source: "ozon" | "ozon_market" | "source_1688" | "manual";
-  status: "discovered" | "optimizing" | "optimizing" | "optimized" | "published";
+  sourceProductId?: string;
+  offerId?: string;
+  researchKeyword?: string;
+  currency: string;
+  status:
+    | "discovered"
+    | "favorited"
+    | "in_product_center"
+    | "optimizing"
+    | "optimized"
+    | "ready_to_publish"
+    | "published"
+    | "promoted"
+    | "archived";
   images: string[];
   createdAt: string;
 }

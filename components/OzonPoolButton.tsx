@@ -8,8 +8,7 @@ import type { OzonMarketProduct } from "@/lib/services/ozon-market";
 
 export function OzonPoolButton({
   productId,
-  storeId,
-  productName
+  storeId
 }: {
   productId: string;
   storeId: string;
@@ -28,8 +27,8 @@ export function OzonPoolButton({
           try {
             const result = await addOzonProductToPool(productId, storeId);
             if (result?.ok) {
-              toast("success", result.message || `商品已成功入池：${productName}`);
-              router.refresh();
+              toast("success", result.message || "已加入商品池");
+              router.push("/products?joined=" + (result.addedCount || 1) + "&source=ozon");
               return;
             }
             toast("error", result?.message || "商品入池失败，请刷新后再试。");
@@ -40,15 +39,17 @@ export function OzonPoolButton({
       }}
       type="button"
     >
-      {pending ? "入池中…" : "入池"}
+      {pending ? "入池中…" : "加入商品池"}
     </button>
   );
 }
 
 export function OzonMarketPoolButton({
-  product
+  product,
+  researchKeyword
 }: {
   product: OzonMarketProduct;
+  researchKeyword?: string;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -61,10 +62,10 @@ export function OzonMarketPoolButton({
       onClick={() => {
         startTransition(async () => {
           try {
-            const result = await addOzonMarketProductToPool(product);
+            const result = await addOzonMarketProductToPool(product, researchKeyword || "");
             if (result?.ok) {
-              toast("success", result.message || `市场商品已成功入池：${product.title}`);
-              router.refresh();
+              toast("success", result.message || "已加入商品池");
+              router.push("/products?joined=" + (result.addedCount || 1) + "&source=ozon_market");
               return;
             }
             toast("error", result?.message || "市场商品入池失败，请检查真实图片链接。");
@@ -75,7 +76,7 @@ export function OzonMarketPoolButton({
       }}
       type="button"
     >
-      {pending ? "入池中…" : "入池"}
+      {pending ? "入池中…" : "加入商品池"}
     </button>
   );
 }

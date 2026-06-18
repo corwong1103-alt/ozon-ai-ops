@@ -4,24 +4,11 @@ import { ReliableProductImage } from "@/components/ReliableProductImage";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { imageList } from "@/lib/product-images";
+import { getProductStage, productStatusLabel } from "@/lib/product-lifecycle";
+import { getProductNextAction, PRODUCT_SOURCE_FILTERS, productSourceFilterLabel, type ProductSourceFilterKey } from "@/lib/product-main-flow";
 import { createProduct } from "./actions";
 
-const sourceLabel = {
-  ozon: "Ozon",
-  ozon_market: "Ozon 市场",
-  source_1688: "1688",
-  manual: "手动"
-} as const;
-
-const statusLabel: Record<string, string> = {
-  discovered: "发现",
-  favorited: "已收藏",
-  optimizing: "优化中",
-  optimized: "已优化",
-  ready_to_publish: "待发布",
-  published: "已上架",
-  promoted: "已推广"
-};
+const POOLED_STATUSES = ["in_product_center", "optimizing", "optimized", "ready_to_publish", "published", "promoted"] as const;
 
 function readDescriptionValue(description: string, label: string) {
   const line = description
@@ -32,26 +19,32 @@ function readDescriptionValue(description: string, label: string) {
   return line?.split(":").slice(1).join(":").trim() || "";
 }
 
-function productStage(status: string, imageCount: number) {
-  if (status === "promoted") return "已推广，回流成交中";
-  if (status === "published") return "已上架 Ozon";
-  if (status === "ready_to_publish") return "待发布上架";
-  if (status === "optimized") return "已优化，待发布";
-  if (status === "optimizing") return "AI 优化中";
-  if (status === "favorited") return "已收藏，待处理";
-  if (status === "discovered" && imageCount === 0) return "先补真实图片";
-  if (status === "discovered") return "待优化";
-  return "待处理";
+function isDemoProduct(description: string) {
+  return description.includes("[DEMO]") || description.includes("mock：");
 }
 
-export default async function ProductsPage() {
+function sourceMatchesFilter(source: string, filter: ProductSourceFilterKey) {
+  if (filter === "all") return true;
+  if (filter === "market") return source === "ozon_market";
+  if (filter === "store") return source === "ozon";
+  if (filter === "manual") return source === "manual";
+  return true;
+}
+
+export default async function ProductsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await requireApprovedUser();
+  const rawSource = typeof searchParams?.source === "string" ? searchParams.source : "all";
+  const sourceFilter = PRODUCT_SOURCE_FILTERS.some((item) => item.key === rawSource) ? rawSource as ProductSourceFilterKey : "all";
+  const showDemo = searchParams?.showDemo === "1";
+  const joinedCount = typeof searchParams?.joined === "string" ? Number(searchParams.joined) : 0;
   const productsRaw = await prisma.product.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, status: { in: [...POOLED_STATUSES] } },
     orderBy: { updatedAt: "desc" },
-    take: 50
   });
-  const products = [...productsRaw].sort((a, b) => {
+  const filteredProducts = productsRaw
+    .filter((product) => sourceMatchesFilter(product.source, sourceFilter))
+    .filter((product) => showDemo || !isDemoProduct(product.description));
+  const products = [...filteredProducts].sort((a, b) => {
     const aImages = imageList(a.images).length;
     const bImages = imageList(b.images).length;
     const aOffer = readDescriptionValue(a.description, "Offer ID");
@@ -63,7 +56,7 @@ export default async function ProductsPage() {
       (product.source === "ozon" || product.source === "ozon_market" ? 35 : 0) +
       (offerId ? 18 : 0) +
       (productId ? 18 : 0) +
-      (product.status === "discovered" ? 4 : 0);
+      (product.status === "in_product_center" ? 8 : product.status === "discovered" ? 4 : 0);
     const scoreDiff = score(b, bImages, bOffer, bProductId) - score(a, aImages, aOffer, aProductId);
     if (scoreDiff !== 0) return scoreDiff;
     return b.updatedAt.getTime() - a.updatedAt.getTime();
@@ -71,7 +64,7 @@ export default async function ProductsPage() {
   const total = products.length;
   const ozonCount = products.filter((product) => product.source === "ozon" || product.source === "ozon_market").length;
   const imageReadyCount = products.filter((product) => imageList(product.images).length > 0).length;
-  const draftCount = products.filter((product) => product.status === "discovered").length;
+  const draftCount = products.filter((product) => ["favorited", "in_product_center"].includes(product.status)).length;
 
   return (
     <AppShell title="商品池" eyebrow="真实货盘" user={user}>
@@ -100,6 +93,15 @@ export default async function ProductsPage() {
         </div>
       </section>
 
+      {joinedCount > 0 && (
+        <section className="pool-action-bar border-green-200 bg-green-50 text-green-900">
+          <div>
+            <strong>刚加入 {joinedCount} 个来自 {rawSource === "ozon" || rawSource === "store" ? "Ozon 店铺同步" : "Ozon 市场调研"} 的商品。</strong>
+            <span>现在可以从下方点击“下一步”继续处理。</span>
+          </div>
+        </section>
+      )}
+
       <section className="pool-action-bar">
         <div>
           <strong>优先处理：</strong>
@@ -109,6 +111,14 @@ export default async function ProductsPage() {
           <Link href="/research/ozon">Ozon 调研</Link>
           <Link href="/collector">1688 采集</Link>
         </div>
+      </section>
+
+      <section className="research-mode-tabs">
+        {PRODUCT_SOURCE_FILTERS.map((item) => (
+          <Link key={item.key} className={sourceFilter === item.key ? "active" : ""} href={item.key === "all" ? "/products" : "/products?source=" + item.key}>
+            {item.label}
+          </Link>
+        ))}
       </section>
 
       <div className="product-pool-layout">
@@ -122,7 +132,7 @@ export default async function ProductsPage() {
             const imageSource = readDescriptionValue(product.description, "Image source");
             const rating = readDescriptionValue(product.description, "Rating");
             const reviews = readDescriptionValue(product.description, "Reviews");
-            const stage = productStage(product.status, images.length);
+            const stage = getProductStage(product.status, images.length);
 
             return (
               <article key={product.id} className="pool-product-row">
@@ -133,15 +143,15 @@ export default async function ProductsPage() {
 
                 <div className="pool-row-main">
                   <div className="pool-row-title-line">
-                    <span className={`pool-source source-${product.source}`}>{sourceLabel[product.source]}</span>
+                    <span className={`pool-source source-${product.source}`}>{productSourceFilterLabel(product.source)}</span>
                     <Link href={`/products/${product.id}`} className="pool-row-title">
                       {product.title}
                     </Link>
                   </div>
 
                   <div className="pool-row-meta">
-                    <span>Offer: {offerId || "未返回"}</span>
-                    <span>Product: {ozonProductId || "手动/待同步"}</span>
+                  <span>Offer: {offerId || "未返回"}</span>
+                    <span>Product: {product.sourceProductId || ozonProductId || "手动/待同步"}</span>
                     <span>{imageSource ? "真实图源" : "图源待确认"}</span>
                   </div>
                   {(rating || reviews) && (
@@ -155,16 +165,16 @@ export default async function ProductsPage() {
                 <div className="pool-row-price">
                   <span>价格</span>
                   <strong>{Number(product.price).toFixed(2)}</strong>
-                  <small>{currency}</small>
+                  <small>{product.currency || currency}</small>
                 </div>
 
                 <div className="pool-row-state">
-                  <span className="status-chip">{statusLabel[product.status]}</span>
+                  <span className="status-chip">{productStatusLabel(product.status)}</span>
                   <small>{stage}</small>
                 </div>
 
-                <Link href={`/products/${product.id}`} className="pool-row-action">
-                  编辑
+                <Link href={getProductNextAction(product.status, product.id).href} className="pool-row-action">
+                  {getProductNextAction(product.status, product.id).label}
                 </Link>
               </article>
             );

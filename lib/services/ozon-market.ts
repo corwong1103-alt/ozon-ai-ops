@@ -9,6 +9,7 @@ import {
   type OzonMarketUiProduct
 } from "@/lib/ozon-market-normalizer";
 import { prisma } from "@/lib/prisma";
+import { MARKET_SEARCH_CACHE_TTL_LABEL, MARKET_SEARCH_CACHE_TTL_MS } from "@/lib/search-intelligence";
 
 const DEFAULT_LIMIT = 20;
 const DEFAULT_ACTOR_ID = "zen-studio/ozon-scraper-pro";
@@ -16,6 +17,15 @@ const APIFY_BASE_URL = "https://api.apify.com/v2";
 const FINAL_RUN_STATUSES = new Set(["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"]);
 
 export type { OzonMarketProduct };
+
+export class MarketSourceNotConfiguredError extends Error {
+  code = "MARKET_SOURCE_NOT_CONFIGURED" as const;
+
+  constructor(message = "当前账号未配置 Ozon Market / Apify 数据源，无法进行真实市场调研。") {
+    super(message);
+    this.name = "MarketSourceNotConfiguredError";
+  }
+}
 
 export type OzonMarketCategory = {
   id: string;
@@ -55,7 +65,10 @@ export function ozonKeyword(keyword: string) {
   const aliases: Record<string, string> = {
     backpack: "рюкзак",
     "phone case": "чехол для телефона",
-    "pet toy": "игрушка для животных"
+    "pet toy": "игрушка для животных",
+    "裤子": "брюки",
+    "裤": "брюки",
+    "牛仔裤": "джинсы"
   };
   return aliases[normalized] || keyword.trim();
 }
@@ -82,13 +95,30 @@ export async function getOzonMarketRuntimeConfig(userId?: string) {
   const publicConfig = readPublicConfig(integration?.publicConfig);
   const token = integration?.secretEncrypted ? decryptSecret(integration.secretEncrypted) : process.env.APIFY_TOKEN || "";
   const actorId = publicConfig.actorId || process.env.APIFY_ACTOR_ID || DEFAULT_ACTOR_ID;
+  const configSource = integration?.userId === userId
+    ? "seller_integration"
+    : integration
+      ? "admin_global_integration"
+      : token
+        ? "env"
+        : "missing";
+  console.info("[ozon_market_config]", JSON.stringify({
+    userId,
+    configSource,
+    provider: integration?.provider || "env",
+    status: integration?.status || "env",
+    hasToken: Boolean(token),
+    actorId,
+    configured: Boolean(token && actorId)
+  }));
 
   return {
     configured: Boolean(token && actorId),
     token,
     actorId,
     maxItems: Number(publicConfig.maxItems || DEFAULT_LIMIT) || DEFAULT_LIMIT,
-    sourceName: integration?.accountLabel || "Apify Ozon Market"
+    sourceName: integration?.accountLabel || "Apify Ozon Market",
+    configSource
   };
 }
 
@@ -231,10 +261,7 @@ async function runApifyActorWithPolling(input: {
   const logs: Array<Record<string, unknown>> = [];
   const timing = { t0: Date.now(), tActorStart: 0, tFirstPoll: 0, tLastPoll: 0, pollCount: 0, tDataset: 0, tAbort: 0 };
   if (!config.configured) {
-    return {
-      items: [] as unknown[],
-      logs: [{ step: "config", status: "UNCONFIGURED", message: "APIFY_TOKEN 或 APIFY_ACTOR_ID 未配置。" }]
-    };
+    throw new MarketSourceNotConfiguredError();
   }
 
   const body = buildActorInput(input);
@@ -515,8 +542,6 @@ export async function testOzonMarketConnection(userId: string) {
   };
 }
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-
 export async function searchOzonMarketProducts(input: {
   userId: string;
   keyword?: string;
@@ -580,7 +605,7 @@ export async function searchOzonMarketProducts(input: {
     return {
       mode: "configured",
       sourceName: config.sourceName,
-      message: `已从缓存读取 ${products.length} 个 Ozon 市场商品（24h 内已抓取，累计命中 ${cached.hitCount + 1} 次，缓存年龄 ${cacheAgeS}s）。`,
+      message: `已从缓存读取 ${products.length} 个 Ozon 市场商品（${MARKET_SEARCH_CACHE_TTL_LABEL}内已抓取，累计命中 ${cached.hitCount + 1} 次，缓存年龄 ${cacheAgeS}s）。`,
       products: products.map(toOzonMarketUiProduct)
     };
   }
@@ -595,7 +620,7 @@ export async function searchOzonMarketProducts(input: {
 
     // 写缓存（upsert：已过期记录直接覆盖，hitCount 重置）
     const cacheWriteStart = Date.now();
-    const expiresAt = new Date(Date.now() + CACHE_TTL_MS);
+    const expiresAt = new Date(Date.now() + MARKET_SEARCH_CACHE_TTL_MS);
     await prisma.marketSearchCache.upsert({
       where: { keyword_category: { keyword: normalizedKeyword, category } },
       create: {

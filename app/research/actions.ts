@@ -67,11 +67,14 @@ export async function addOzonProductToPool(productId: string, storeId: string) {
     userId: user.id,
     storeId: store.id,
     source: "ozon" as const,
+    sourceProductId: String(ozonProduct.productId),
+    offerId: ozonProduct.offerId,
+    currency: ozonProduct.currency || "RUB",
     title: ozonProduct.name,
     description: ozonProductDescription(ozonProduct),
     price: ozonProduct.price,
     images: ozonProduct.images,
-    status: "discovered" as const
+    status: "in_product_center" as const
   };
   const product = existing
     ? await prisma.product.update({ where: { id: existing.id }, data })
@@ -102,9 +105,11 @@ export async function addOzonProductToPool(productId: string, storeId: string) {
 
   return {
     ok: true,
+    productId: product.id,
+    addedCount: 1,
     message: existing
-      ? `商品已更新入池：${ozonProduct.name}`
-      : `商品已成功入池：${ozonProduct.name}`
+      ? "已加入商品池"
+      : "已加入商品池"
   };
 }
 
@@ -121,7 +126,7 @@ function ozonMarketProductDescription(product: OzonMarketProduct) {
   ].filter(Boolean).join("\n");
 }
 
-export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
+export async function addOzonMarketProductToPool(product: OzonMarketProduct, researchKeyword = "") {
   const user = await requireApprovedUser();
 
   if (!product.externalId || !product.title) {
@@ -151,11 +156,15 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
   const data = {
     userId: user.id,
     source: "ozon_market" as const,
+    sourceProductId: product.externalId,
+    offerId: product.externalId,
+    researchKeyword: researchKeyword.trim() || null,
+    currency: "RUB",
     title: product.title,
     description: ozonMarketProductDescription(product),
     price: product.price ?? 0,
     images,
-    status: "discovered" as const
+    status: "in_product_center" as const
   };
   const pooledProduct = existing
     ? await prisma.product.update({ where: { id: existing.id }, data })
@@ -187,8 +196,10 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
 
   return {
     ok: true,
+    productId: pooledProduct.id,
+    addedCount: 1,
     message: existing
-      ? `市场商品已更新入池：${product.title}`
-      : `市场商品已成功入池：${product.title}`
+      ? "已加入商品池"
+      : "已加入商品池"
   };
 }

@@ -3,11 +3,12 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/AppShell";
 import { AiGeneratedImagePanel } from "@/components/AiGeneratedImagePanel";
-import { ProductAiButtons, ProductEditForm, ProductUploadForm } from "@/components/ProductActionControls";
+import { ProductEditForm, ProductPrimaryAction } from "@/components/ProductActionControls";
 import { ProductImageManager } from "@/components/ProductImageManager";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { imageList } from "@/lib/product-images";
+import { PRODUCT_LIFECYCLE } from "@/lib/product-lifecycle";
 import { buildUploadChecklist } from "@/lib/services/ozon";
 
 function imagesToText(images: unknown) {
@@ -36,15 +37,11 @@ function readInferredPrompt(value: Prisma.JsonValue | null | undefined) {
   return typeof prompt === "string" ? prompt : "";
 }
 
-const LIFECYCLE_STAGES: Array<{ key: string; label: string }> = [
-  { key: "discovered", label: "发现" },
-  { key: "favorited", label: "收藏" },
-  { key: "optimizing", label: "优化中" },
-  { key: "optimized", label: "已优化" },
-  { key: "ready_to_publish", label: "待发布" },
-  { key: "published", label: "已上架" },
-  { key: "promoted", label: "已推广" }
-];
+function readOptimizedText(value: Prisma.JsonValue | null | undefined) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const optimized = value.optimized;
+  return typeof optimized === "string" ? optimized : "";
+}
 
 export default async function ProductEditPage({ params }: { params: { id: string } }) {
   const user = await requireApprovedUser();
@@ -63,8 +60,9 @@ export default async function ProductEditPage({ params }: { params: { id: string
     })))
     .filter((item, index, list) => list.findIndex((candidate) => candidate.url === item.url) === index);
   const latestInferredPrompt = tasks.map((task) => readInferredPrompt(task.metadata)).find(Boolean) || "";
+  const latestOptimizedText = tasks.map((task) => readOptimizedText(task.metadata)).find(Boolean) || "";
 
-  const currentStageIndex = LIFECYCLE_STAGES.findIndex((s) => s.key === product.status);
+  const currentStageIndex = PRODUCT_LIFECYCLE.findIndex((s) => s.key === product.status);
 
   return (
     <AppShell title={product.title} eyebrow="商品中心 · 详情" user={user}>
@@ -72,10 +70,10 @@ export default async function ProductEditPage({ params }: { params: { id: string
       <section className="ledger-card mb-5 p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-bold uppercase tracking-wider text-steel">商品生命周期</p>
-          <span className="status-chip">{LIFECYCLE_STAGES[currentStageIndex]?.label || product.status}</span>
+          <span className="status-chip">{PRODUCT_LIFECYCLE[currentStageIndex]?.label || product.status}</span>
         </div>
         <div className="flex items-center gap-1 overflow-x-auto">
-          {LIFECYCLE_STAGES.map((stage, index) => {
+          {PRODUCT_LIFECYCLE.map((stage, index) => {
             const done = index < currentStageIndex;
             const current = index === currentStageIndex;
             return (
@@ -83,10 +81,28 @@ export default async function ProductEditPage({ params }: { params: { id: string
                 <div className={`lifecycle-node ${done ? "done" : current ? "current" : ""}`}>
                   <span>{stage.label}</span>
                 </div>
-                {index < LIFECYCLE_STAGES.length - 1 && <div className={`lifecycle-bar ${done ? "done" : ""}`} />}
+                {index < PRODUCT_LIFECYCLE.length - 1 && <div className={`lifecycle-bar ${done ? "done" : ""}`} />}
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <section className="ledger-card mb-5 p-5">
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-steel">唯一主流程</p>
+            <h3 className="mt-1 font-display text-2xl">下一步只做一件事</h3>
+            <p className="mt-2 text-sm leading-6 text-steel">
+              默认路径：市场调研 → 商品池 → AI 优化 → 人工确认 → 发布到 Ozon → 生成推广内容。
+            </p>
+          </div>
+          <ProductPrimaryAction
+            productId={product.id}
+            status={product.status}
+            stores={stores}
+            defaultStoreId={product.storeId ?? ""}
+          />
         </div>
       </section>
 
@@ -110,19 +126,9 @@ export default async function ProductEditPage({ params }: { params: { id: string
         <section className="ledger-card p-5">
           <div className="mb-3">
             <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 2 · 商品处理</p>
-            <h3 className="mt-1 font-display text-2xl">直接铺品 / AI 优化</h3>
+            <h3 className="mt-1 font-display text-2xl">上架前检查</h3>
           </div>
-          <p className="mb-4 text-sm leading-6 text-steel">AI 不是必经步骤。可直接铺品上架，或先 AI 优化再发布。</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-line p-3">
-              <strong className="text-sm">流程 A · 直接铺品</strong>
-              <p className="mt-1 text-xs text-steel">用原始数据直接发布到 Ozon</p>
-            </div>
-            <div className="rounded-lg border border-line p-3">
-              <strong className="text-sm">流程 B · AI 优化</strong>
-              <p className="mt-1 text-xs text-steel">先 AI 生成标题/卖点/图，再发布</p>
-            </div>
-          </div>
+          <p className="mb-4 text-sm leading-6 text-steel">默认先完成 AI 优化，再由人工确认后发布到 Ozon。</p>
 
           {/* 上架前检查清单 */}
           <div className="mt-4 rounded-lg border border-line p-3">
@@ -142,10 +148,6 @@ export default async function ProductEditPage({ params }: { params: { id: string
               ))}
             </ul>
           </div>
-
-          <div className="mt-4">
-            <ProductUploadForm productId={product.id} stores={stores} defaultStoreId={product.storeId ?? ""} />
-          </div>
         </section>
 
         {/* 模块3: AI 优化 */}
@@ -154,7 +156,11 @@ export default async function ProductEditPage({ params }: { params: { id: string
             <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 3 · AI 优化</p>
             <h3 className="mt-1 font-display text-2xl">标题 / 卖点 / 描述 / FAQ / SEO</h3>
           </div>
-          <ProductAiButtons productId={product.id} />
+          {latestOptimizedText ? (
+            <pre className="whitespace-pre-wrap rounded-lg border border-line bg-rail/40 p-4 text-sm leading-6 text-ink">{latestOptimizedText}</pre>
+          ) : (
+            <p className="text-sm leading-6 text-steel">点击顶部唯一主按钮“开始 AI 优化”后，这里会显示生成结果。</p>
+          )}
         </section>
 
         {/* 模块4: 素材中心 */}

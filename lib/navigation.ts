@@ -24,7 +24,6 @@ export const sellerNavItems: NavItem[] = [
   { href: "/dashboard", label: "首页", icon: Gauge },
   { href: "/research/ozon", label: "市场研究", icon: Search },
   { href: "/products", label: "商品中心", icon: Boxes },
-  { href: "/ai-studio", label: "AI 工作台", icon: Bot },
   { href: "/content", label: "内容中心", icon: Megaphone },
   { href: "/stores", label: "店铺中心", icon: Store },
   { href: "/membership", label: "会员中心", icon: Coins }

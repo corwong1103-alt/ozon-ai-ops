@@ -29,7 +29,7 @@ export default async function ContentCenterPage() {
       include: { product: true }
     }),
     prisma.product.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, status: { in: ["optimized", "ready_to_publish", "published", "promoted"] } },
       select: { id: true, title: true },
       orderBy: { updatedAt: "desc" },
       take: 50
@@ -56,7 +56,7 @@ export default async function ContentCenterPage() {
         <section className="ledger-card mt-4 p-5">
           <h3 className="font-display text-2xl mb-3">从商品创建内容</h3>
           {products.length === 0 ? (
-            <p className="text-sm text-steel">请先到商品中心添加商品。</p>
+            <p className="text-sm text-steel">请先在商品详情页完成 AI 优化或发布，再生成社媒推广内容。</p>
           ) : (
             <form action={createContentFromProduct} className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
               <select name="productId" className="field" defaultValue={products[0]?.id}>

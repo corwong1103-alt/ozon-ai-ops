@@ -5,6 +5,7 @@ import { requireApprovedUser } from "@/lib/auth";
 import { generateText } from "@/lib/ai/provider";
 import { prisma } from "@/lib/prisma";
 import { publishToVk } from "@/lib/services/vk";
+import { isContentEligibleProduct } from "@/lib/product-main-flow";
 
 // 从商品创建内容（V3：内容必须来自商品中心）
 export async function createContentFromProduct(formData: FormData): Promise<void> {
@@ -15,6 +16,7 @@ export async function createContentFromProduct(formData: FormData): Promise<void
 
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
   if (!product) { console.error("[content_create] product not found"); return; }
+  if (!isContentEligibleProduct(product.status)) { console.error("[content_create] product not eligible"); return; }
 
   const platformName = platform === "vk" ? "VK" : "Wibes";
   const prompts: Record<string, string> = {
@@ -37,7 +39,7 @@ export async function createContentFromProduct(formData: FormData): Promise<void
       data: { userId: user.id, productId, platform, content, mediaType: "image", status: "draft" }
     });
     await prisma.taskLog.create({
-      data: { userId: user.id, productId, type: "social_post", status: "success", creditCost: 0, message: `从商品创建 ${platform} 内容（${topic}）` }
+      data: { userId: user.id, productId, type: "social_post", status: "success", creditCost: 0, message: "已生成内容草稿，可提交审核。" }
     });
     revalidatePath("/content");
   } catch (error) {

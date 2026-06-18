@@ -229,7 +229,7 @@ export function OzonResearchConsole({
                   <strong>{marketResult.sourceName}</strong>
                   <p>{marketResult.message}</p>
                 </div>
-                <a href="/integrations">配置 Ozon 市场数据源</a>
+                <a href="/integrations">去配置数据源</a>
               </div>
 
               {marketProducts.length > 0 && (
@@ -291,7 +291,7 @@ export function OzonResearchConsole({
                         <strong>{product.price}</strong>
                         <small>{product.currency}</small>
                       </div>
-                      <OzonMarketPoolButton product={product} />
+                      <OzonMarketPoolButton product={product} researchKeyword={keyword} />
                     </div>
                   </article>
                   );
@@ -300,8 +300,8 @@ export function OzonResearchConsole({
 
               {marketProducts.length === 0 && (
                 <section className="research-empty-market">
-                  <h3>这里暂时不会放假数据。</h3>
-                  <p>要实现你要的“全 Ozon 范围、类目真实搜索、热销 Top10-20”，需要在 API 接入中心填写一个真实市场数据源。当前 Ozon Seller API 无法提供前台排名和全站搜索。</p>
+                  <h3>{marketResult.mode === "error" ? "当前账号未配置 Ozon Market / Apify 数据源，无法进行真实市场调研。" : "没有找到相关商品。"}</h3>
+                  <p>{marketResult.mode === "error" ? "请先在店铺中心或 API 接入中心配置市场数据源。" : "没有找到相关商品，建议更换关键词或使用俄文关键词。"}</p>
                   <div>
                     <span>可接入来源</span>
                     <span>Ozon 前台采集服务</span>

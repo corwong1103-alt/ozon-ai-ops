@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import {
   categoryKeyword,
+  getOzonMarketRuntimeConfig,
   ozonKeyword,
   searchCategory,
   searchProducts,
@@ -10,9 +11,9 @@ import {
 } from "@/lib/services/ozon-market";
 import { toOzonMarketUiProduct } from "@/lib/ozon-market-normalizer";
 import type { OzonMarketUiProduct } from "@/lib/ozon-market-normalizer";
+import { MARKET_SEARCH_CACHE_TTL_MS } from "@/lib/search-intelligence";
 
 const DEFAULT_LIMIT = 20;
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** 计算归一化后的搜索词与 category，作为缓存/任务的统一 key。 */
 export function resolveSearchKey(keyword: string, categoryId?: string) {
@@ -34,10 +35,20 @@ export async function resolveMarketSearchForPage(input: {
 }): Promise<
   | { mode: "cache_hit"; products: OzonMarketUiProduct[]; message: string }
   | { mode: "task_pending"; taskId: string; message: string }
+  | { mode: "market_error"; code: "MARKET_SOURCE_NOT_CONFIGURED"; message: string }
   | { mode: "no_query"; message: string }
 > {
   const { normalizedKeyword, category, hasQuery } = resolveSearchKey(input.keyword, input.categoryId);
   if (!hasQuery) return { mode: "no_query", message: "请输入关键词或选择类目。" };
+
+  const config = await getOzonMarketRuntimeConfig(input.userId);
+  if (!config.configured) {
+    return {
+      mode: "market_error",
+      code: "MARKET_SOURCE_NOT_CONFIGURED",
+      message: "当前账号未配置 Ozon Market / Apify 数据源，无法进行真实市场调研。"
+    };
+  }
 
   const cacheLookupStart = Date.now();
   const cached = await prisma.marketSearchCache.findUnique({
@@ -128,7 +139,7 @@ export async function createOrReuseResearchTask(input: {
  * 后台执行搜索任务。
  * 1. 查 MarketSearchCache（命中则直接成功，fromCache=true）
  * 2. 未命中调 Apify（searchProducts/searchCategory）
- * 3. 写 MarketSearchCache（TTL 24h）
+ * 3. 写 MarketSearchCache（TTL 30 分钟）
  * 4. 更新 ResearchTask.status=success + result
  * 失败：status=failed + errorMessage
  */
@@ -188,7 +199,7 @@ export async function executeResearchTask(taskId: string): Promise<void> {
 
     // ── 3. 写缓存 ──
     const cacheWriteStart = Date.now();
-    const expiresAt = new Date(Date.now() + CACHE_TTL_MS);
+    const expiresAt = new Date(Date.now() + MARKET_SEARCH_CACHE_TTL_MS);
     await prisma.marketSearchCache.upsert({
       where: { keyword_category: { keyword: task.keyword, category: task.category } },
       create: {

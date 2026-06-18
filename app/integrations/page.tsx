@@ -1,7 +1,7 @@
 import { KeyRound, Link2, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DashscopeTestForm, IntegrationConfigForm, OzonMarketTestForm } from "@/components/IntegrationFeedbackForms";
-import { requireAdminUser } from "@/lib/auth";
+import { requireApprovedUser } from "@/lib/auth";
 import { integrationDefinitions, readPublicConfig } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
@@ -18,7 +18,7 @@ function statusClass(status?: string, hasSecret?: boolean) {
 }
 
 export default async function IntegrationsPage() {
-  const user = await requireAdminUser();
+  const user = await requireApprovedUser();
   const integrations = await prisma.apiIntegration.findMany({
     where: { userId: user.id }
   });

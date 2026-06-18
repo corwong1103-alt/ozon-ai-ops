@@ -1,4 +1,4 @@
--- P3: ProductStatus enum 迁移到 V3 7 阶段生命周期
+-- P3: ProductStatus enum 迁移到 V3 商品生命周期
 -- 重建 type 方案（支持多旧值合并到同新值，事务安全）
 -- 映射：draft→discovered, translated/image_generated→optimizing, video_generated→optimized, uploaded→published
 -- 新增：favorited, ready_to_publish, promoted

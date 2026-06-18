@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai/prompts";
 import { runBaseTranslationTask, runCreditAiTask } from "@/lib/services/ai";
 import { uploadProductToOzon } from "@/lib/services/ozon";
+import { isContentEligibleProduct } from "@/lib/product-main-flow";
 
 const allowedSources = ["ozon", "ozon_market", "source_1688", "manual"] as const;
 
@@ -36,7 +37,9 @@ export async function createProduct(formData: FormData) {
       title: String(formData.get("title") || ""),
       description: String(formData.get("description") || ""),
       price: Number(formData.get("price") || 0),
-      images
+      currency: String(formData.get("currency") || "CNY"),
+      images,
+      status: "in_product_center"
     }
   });
 
@@ -156,6 +159,107 @@ export async function translateProduct(productId: string) {
     ok: true,
     message: "标题/描述俄文翻译已生成。"
   };
+}
+
+export async function optimizeProductMainFlow(productId: string) {
+  const user = await requireApprovedUser();
+  const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
+  if (!product) return { ok: false, message: "未找到商品，无法开始 AI 优化。" };
+  if (!["in_product_center", "favorited", "discovered", "optimizing"].includes(product.status)) {
+    return { ok: false, message: "当前商品状态不需要重新开始 AI 优化。" };
+  }
+
+  await prisma.product.update({ where: { id: product.id }, data: { status: "optimizing" } });
+  const optimized = await generateText({
+    userId: user.id,
+    messages: [
+      { role: "system", content: "你是 Ozon 商品运营专家，输出可直接审核的俄语商品优化草稿。" },
+      {
+        role: "user",
+        content: buildProductTranslationPrompt({
+          title: product.title,
+          description: product.description,
+          price: product.price.toString()
+        })
+      }
+    ],
+    temperature: 0.35
+  });
+
+  await prisma.taskLog.create({
+    data: {
+      userId: user.id,
+      productId: product.id,
+      type: "translate",
+      status: "success",
+      creditCost: 0,
+      message: "主流程 AI 优化已完成，等待人工确认。",
+      metadata: { optimized }
+    }
+  });
+  await prisma.product.update({ where: { id: product.id }, data: { status: "optimized" } });
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "AI 优化已完成，请人工确认。" };
+}
+
+export async function confirmProductReady(productId: string) {
+  const user = await requireApprovedUser();
+  const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
+  if (!product) return { ok: false, message: "未找到商品，无法确认。" };
+  if (product.status !== "optimized") return { ok: false, message: "只有已优化商品可以人工确认。" };
+
+  await prisma.product.update({ where: { id: product.id }, data: { status: "ready_to_publish" } });
+  await prisma.taskLog.create({
+    data: {
+      userId: user.id,
+      productId: product.id,
+      type: "upload",
+      status: "queued",
+      creditCost: 0,
+      message: "人工确认完成，商品进入待发布。"
+    }
+  });
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "人工确认完成，下一步发布到 Ozon。" };
+}
+
+export async function generatePromotionDraft(productId: string) {
+  const user = await requireApprovedUser();
+  const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
+  if (!product) return { ok: false, message: "未找到商品，无法生成推广内容。" };
+  if (!isContentEligibleProduct(product.status)) {
+    return { ok: false, message: "只能从已优化或已发布商品生成推广内容。" };
+  }
+
+  const content = await generateText({
+    userId: user.id,
+    messages: [
+      { role: "system", content: "你是俄罗斯 VK 社媒营销专家。" },
+      { role: "user", content: `为 VK 生成俄语推广文案，包含标题、正文、标签和图片建议。商品：${product.title}\n${product.description}` }
+    ],
+    temperature: 0.7
+  });
+  await prisma.socialPost.create({
+    data: { userId: user.id, productId: product.id, platform: "vk", content, mediaType: "image", status: "draft" }
+  });
+  await prisma.taskLog.create({
+    data: {
+      userId: user.id,
+      productId: product.id,
+      type: "social_post",
+      status: "success",
+      creditCost: 0,
+      message: "已生成内容草稿，可提交审核。"
+    }
+  });
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/content");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "已生成内容草稿，可提交审核。" };
 }
 
 export async function translateImageText(productId: string) {
@@ -375,6 +479,8 @@ export async function uploadProduct(productId: string, formData: FormData) {
   });
   await prisma.product.update({ where: { id: productId }, data: { storeId: store.id, status: "published" } });
   revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
   return {
     ok: true,
     message: "模拟上传到 Ozon 已完成。"

@@ -32,15 +32,17 @@ enum ProductSource {
   manual
 }
 
-/// V3 商品生命周期 7 阶段
+/// V3 商品生命周期 9 阶段
 enum ProductStatus {
   discovered        // 发现（原 draft）
   favorited         // 收藏
+  in_product_center // 已入商品中心
   optimizing        // 优化中（原 translated/image_generated）
   optimized         // 已优化（原 video_generated）
   ready_to_publish  // 待发布
   published         // 已发布（原 uploaded）
   promoted          // 已推广
+  archived          // 已归档
 }
 
 enum SocialPlatform {
@@ -214,9 +216,13 @@ model Product {
   storeId     String?
   store       Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
   source      ProductSource @default(manual)
+  sourceProductId String?
+  offerId     String?
+  researchKeyword String?
   title       String
   description String
   price       Decimal       @db.Decimal(12, 2)
+  currency    String        @default("CNY")
   images      Json          @default("[]")
   status      ProductStatus @default(discovered)
   socialPosts SocialPost[]
@@ -227,6 +233,8 @@ model Product {
   @@index([userId])
   @@index([storeId])
   @@index([status])
+  @@index([source])
+  @@index([sourceProductId])
 }
 
 model SocialAccount {
@@ -318,7 +326,7 @@ model AdminActionLog {
   @@index([targetUserId])
 }
 
-/// Ozon 市场搜索结果缓存。keyword+category 组合为唯一键，TTL 24h。
+/// Ozon 市场搜索结果缓存。keyword+category 组合为唯一键，TTL 30 分钟。
 /// P0-1：同关键词重复搜索直接命中缓存，跳过 Apify 调用。
 model MarketSearchCache {
   id           String   @id @default(cuid())

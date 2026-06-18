@@ -17,12 +17,12 @@ export default async function AiStudioPage() {
   ]);
 
   return (
-    <AppShell title="AI 工作台" eyebrow="AI Studio" user={user}>
+    <AppShell title="批量 AI 工具" eyebrow="Batch AI" user={user}>
       <section className="dashboard-board">
         <div className="dashboard-topline">
           <div>
-            <p className="section-kicker">统一 AI 能力中心</p>
-            <h3>商品 AI · 素材 AI · 视频 AI · 社媒 AI 四类能力统一入口。</h3>
+            <p className="section-kicker">批量 AI 工具</p>
+            <h3>建议先从商品池选择商品；这里只保留批量处理入口。</h3>
           </div>
           <div className="dashboard-user-strip">
             <span>图片额度 {imageCredits}</span>

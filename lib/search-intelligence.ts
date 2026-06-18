@@ -1,0 +1,2 @@
+export const MARKET_SEARCH_CACHE_TTL_MS = 30 * 60 * 1000;
+export const MARKET_SEARCH_CACHE_TTL_LABEL = "30 分钟";

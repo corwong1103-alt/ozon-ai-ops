@@ -33,6 +33,9 @@ export function detectLanguage(text: string): "zh" | "en" | "ru" | "other" {
 }
 
 const STATIC_RU: Record<string, string> = {
+  "裤子": "брюки",
+  "裤": "брюки",
+  "牛仔裤": "джинсы",
   backpack: "рюкзак",
   "phone case": "чехол для телефона",
   "pet toy": "игрушка для животных",
@@ -43,6 +46,29 @@ const STATIC_RU: Record<string, string> = {
   "dog toy": "игрушка для собак",
   "hair serum": "сыворотка для волос"
 };
+
+const STATIC_EXPANDED_RU: Record<string, string[]> = {
+  "裤子": ["брюки", "штаны", "джинсы"],
+  "裤": ["брюки", "штаны", "джинсы"],
+  "牛仔裤": ["джинсы", "брюки", "штаны"]
+};
+
+export function fallbackExpandedKeywords(keyword: string): ExpandedKeyword[] {
+  const original = keyword.trim();
+  const detected = detectLanguage(original);
+  const translated = STATIC_RU[original.toLowerCase()] || (detected === "ru" ? original : "");
+  const expanded = STATIC_EXPANDED_RU[original] || STATIC_EXPANDED_RU[original.toLowerCase()] || [];
+  const keywords: ExpandedKeyword[] = [{ keyword: original, language: detected, source: "original" }];
+  if (translated && translated !== original) {
+    keywords.push({ keyword: translated, language: "ru", source: "translated" });
+  }
+  for (const item of expanded) {
+    if (!keywords.some((existing) => existing.keyword.toLowerCase() === item.toLowerCase())) {
+      keywords.push({ keyword: item, language: "ru", source: "expanded" });
+    }
+  }
+  return keywords;
+}
 
 function parseExpansionJson(content: string): { detectedLanguage?: string; translatedRu?: string; expanded?: string[] } | null {
   const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -126,10 +152,7 @@ export async function expandKeyword(input: {
     console.info("[keyword_expand_error]", JSON.stringify({ keyword: original, error: error instanceof Error ? error.message.slice(0, 100) : "" }));
   }
 
-  const fallbackKeywords: ExpandedKeyword[] = [{ keyword: original, language: detected, source: "original" }];
-  if (fallbackRu && fallbackRu !== original) {
-    fallbackKeywords.push({ keyword: fallbackRu, language: "ru", source: "translated" });
-  }
+  const fallbackKeywords = fallbackExpandedKeywords(original);
   const fallbackResult: KeywordExpansionResult = {
     original,
     detectedLanguage: detected,

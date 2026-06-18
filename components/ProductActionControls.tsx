@@ -3,14 +3,18 @@
 import { useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  confirmProductReady,
+  generatePromotionDraft,
   generateProductImage,
   generateProductVideo,
+  optimizeProductMainFlow,
   translateImageText,
   translateProduct,
   updateProduct,
   uploadProduct
 } from "@/app/products/actions";
 import { useToast } from "@/components/Toast";
+import { getProductNextAction } from "@/lib/product-main-flow";
 
 function useActionFeedback() {
   const router = useRouter();
@@ -110,6 +114,70 @@ export function ProductAiButtons({ productId }: { productId: string }) {
         AI视频暂停
       </button>
     </div>
+  );
+}
+
+export function ProductPrimaryAction({
+  productId,
+  status,
+  stores,
+  defaultStoreId
+}: {
+  productId: string;
+  status: string;
+  stores: Array<{ id: string; name: string; ozonStoreId: string }>;
+  defaultStoreId: string;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const { pending, run } = useActionFeedback();
+  const action = getProductNextAction(status, productId);
+
+  function execute() {
+    if (action.intent === "optimize" || action.intent === "pool" || action.intent === "progress") {
+      run(() => optimizeProductMainFlow(productId));
+      return;
+    }
+    if (action.intent === "confirm") {
+      run(() => confirmProductReady(productId));
+      return;
+    }
+    if (action.intent === "promote") {
+      run(() => generatePromotionDraft(productId));
+      return;
+    }
+    if (action.intent === "publish") {
+      const form = formRef.current;
+      if (!form) return;
+      run(() => uploadProduct(productId, new FormData(form)));
+    }
+  }
+
+  const disabled = pending || action.intent === "archived" || (action.intent === "publish" && stores.length === 0);
+
+  return (
+    <form
+      ref={formRef}
+      className="space-y-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        execute();
+      }}
+    >
+      {action.intent === "publish" && (
+        <select className="field" name="storeId" required defaultValue={defaultStoreId}>
+          <option value="">选择 Ozon 店铺</option>
+          {stores.map((store) => (
+            <option key={store.id} value={store.id}>
+              {store.name} / {store.ozonStoreId}
+            </option>
+          ))}
+        </select>
+      )}
+      <button className="btn-primary w-full" disabled={disabled} type="submit">
+        {pending ? "处理中…" : stores.length === 0 && action.intent === "publish" ? "先绑定 Ozon 店铺" : action.label}
+      </button>
+      <p className="text-xs text-steel">唯一主流程：市场调研 → 商品池 → AI 优化 → 人工确认 → 发布到 Ozon → 生成推广内容。</p>
+    </form>
   );
 }
 

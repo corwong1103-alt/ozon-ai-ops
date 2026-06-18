@@ -58,6 +58,9 @@ export async function prepareFullSiteTest() {
         userId: user.id,
         storeId: store.id,
         source: "ozon" as const,
+        sourceProductId: String(item.productId),
+        offerId: item.offerId,
+        currency: item.currency || "RUB",
         title: item.name,
         description: [
           `Ozon Product ID: ${item.productId}`,
@@ -68,7 +71,7 @@ export async function prepareFullSiteTest() {
         ].join("\n"),
         price: item.price,
         images: item.images,
-        status: "discovered" as const
+        status: "in_product_center" as const
       };
 
       if (existing) {
