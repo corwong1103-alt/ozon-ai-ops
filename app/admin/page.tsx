@@ -1,84 +1,130 @@
+import Link from "next/link";
+import { AlertTriangle, Boxes, Bot, Database, KeyRound, Rocket, Search, Settings, Store, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireAdminUser } from "@/lib/auth";
-import { maskSecret } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
-import { updateUserPlan, updateUserStatus } from "./actions";
 
-export default async function AdminPage() {
+function formatTime(date: Date) {
+  return date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+export default async function AdminConsolePage() {
   const user = await requireAdminUser();
-  const users = await prisma.user.findMany({
-    include: { credits: true, stores: true, socialAccounts: true, customerMessages: true },
-    orderBy: { createdAt: "desc" },
-    take: 50
-  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [
+    totalUsers,
+    totalStores,
+    totalProducts,
+    todayResearch,
+    todayAiTasks,
+    todayPublish,
+    failedTasks,
+    integrations,
+    recentFailed
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.store.count(),
+    prisma.product.count(),
+    prisma.taskLog.count({ where: { type: { in: ["research", "collect"] }, createdAt: { gte: today } } }),
+    prisma.taskLog.count({ where: { type: { in: ["translate", "image", "video"] }, createdAt: { gte: today } } }),
+    prisma.taskLog.count({ where: { type: { in: ["upload", "social_publish"] }, createdAt: { gte: today } } }),
+    prisma.taskLog.count({ where: { status: "failed" } }),
+    prisma.apiIntegration.count({ where: { secretEncrypted: { not: null } } }),
+    prisma.taskLog.findMany({ where: { status: "failed" }, orderBy: { createdAt: "desc" }, take: 5, include: { user: true } })
+  ]);
+
+  const stats = [
+    { label: "总客户数", value: totalUsers, unit: "人", href: "/admin/customers", icon: Users },
+    { label: "总店铺数", value: totalStores, unit: "店", href: "/admin/customers", icon: Store },
+    { label: "总商品数", value: totalProducts, unit: "件", href: "/admin/customers", icon: Boxes },
+    { label: "今日研究", value: todayResearch, unit: "次", href: "/tasks", icon: Search },
+    { label: "今日AI任务", value: todayAiTasks, unit: "次", href: "/admin/ai", icon: Bot },
+    { label: "今日发布", value: todayPublish, unit: "次", href: "/tasks", icon: Rocket },
+    { label: "失败任务", value: failedTasks, unit: "条", href: "/tasks", icon: AlertTriangle },
+    { label: "集成接入", value: integrations, unit: "项", href: "/integrations", icon: KeyRound }
+  ];
+
+  const menuCards = [
+    { label: "客户管理", desc: "审核 / 冻结 / 套餐 / 额度", href: "/admin/customers", icon: Users },
+    { label: "数据源中心", desc: "Ozon / 1688 / Wildberries", href: "/admin/datasources", icon: Database },
+    { label: "AI 中心", desc: "Qwen / 图片 / 视频模型", href: "/admin/ai", icon: Bot },
+    { label: "集成中心", desc: "Research / AI / Marketplace / Social", href: "/integrations", icon: KeyRound },
+    { label: "任务中心", desc: "Research / AI / Publish / Sync", href: "/tasks", icon: Search },
+    { label: "系统设置", desc: "平台配置", href: "/admin/settings", icon: Settings }
+  ];
 
   return (
-    <AppShell title="管理后台" eyebrow="Admin Console" user={user}>
-      <div className="ledger-card overflow-hidden">
-        <div className="grid grid-cols-12 border-b border-line bg-rail/45 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-steel">
-          <span className="col-span-3">用户</span>
-          <span className="col-span-2">状态</span>
-          <span className="col-span-2">等级</span>
-          <span className="col-span-2">AI额度</span>
-          <span className="col-span-3 text-right">审核操作</span>
-        </div>
-        {users.map((item) => (
-          <div key={item.id} className="grid grid-cols-12 gap-3 border-b border-line px-4 py-4 text-sm last:border-b-0">
-            <div className="col-span-12 md:col-span-3">
-              <strong>{item.email}</strong>
-              <p className="mt-1 text-xs text-steel">
-                店铺 {item.stores.length} / 社媒 {item.socialAccounts.length} / 客服 {item.customerMessages.length}
-              </p>
-            </div>
-            <span className="col-span-4 text-steel md:col-span-2">{item.status}</span>
-            <span className="col-span-4 text-steel md:col-span-2">{item.plan}</span>
-            <span className="col-span-4 text-steel md:col-span-2">
-              图 {item.credits?.imageCredits ?? 0} / 视频 {item.credits?.videoCredits ?? 0}
-            </span>
-            <div className="col-span-12 grid gap-3 md:col-span-3">
-              <form action={updateUserStatus} className="flex justify-end gap-2">
-                <input type="hidden" name="userId" value={item.id} />
-                <button className="btn-secondary px-3 py-2 text-xs" name="status" value="approved">
-                  开通
-                </button>
-                <button className="btn-secondary px-3 py-2 text-xs" name="status" value="suspended">
-                  停用
-                </button>
-                <button className="btn-secondary px-3 py-2 text-xs" name="status" value="expired">
-                  过期
-                </button>
-              </form>
-              <form action={updateUserPlan} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                <input type="hidden" name="userId" value={item.id} />
-                <select className="field py-2 text-xs" name="plan" defaultValue={item.plan}>
-                  <option value="starter">starter</option>
-                  <option value="pro">pro</option>
-                  <option value="vip">vip</option>
-                </select>
-                <input className="field py-2 text-xs" name="expiresAt" type="date" defaultValue={item.expiresAt?.toISOString().slice(0, 10) ?? ""} />
-                <button className="btn-primary px-3 py-2 text-xs">保存</button>
-              </form>
-            </div>
+    <AppShell title="平台控制台" eyebrow="Admin Console" user={user}>
+      <section className="dashboard-board">
+        <div className="dashboard-topline">
+          <div>
+            <p className="section-kicker">平台概览</p>
+            <h3>总览客户、店铺、商品、任务与发布全链路状态。</h3>
           </div>
-        ))}
-      </div>
-
-      <section className="ledger-card mt-6 overflow-hidden">
-        <div className="border-b border-line bg-rail/45 px-4 py-3">
-          <h3 className="font-display text-3xl">用户店铺绑定</h3>
-          <p className="mt-1 text-sm text-steel">管理员可查看店铺归属和凭证状态，但不明文显示 Ozon API Key。</p>
+          <div className="dashboard-user-strip">
+            <span>管理员</span>
+            <span>{user.email}</span>
+          </div>
         </div>
-        {users.flatMap((item) =>
-          item.stores.map((store) => (
-            <div key={store.id} className="grid grid-cols-12 gap-3 border-b border-line px-4 py-4 text-sm last:border-b-0">
-              <strong className="col-span-12 md:col-span-3">{item.email}</strong>
-              <span className="col-span-12 text-steel md:col-span-3">{store.name}</span>
-              <span className="col-span-6 text-steel md:col-span-2">{store.ozonStoreId}</span>
-              <span className="col-span-6 text-steel md:col-span-2">{store.ozonClientId}</span>
-              <span className="col-span-12 text-steel md:col-span-2 md:text-right">{maskSecret(store.apiKeyEncrypted)}</span>
+
+        <div className="dashboard-kpi-grid">
+          {stats.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.label} href={item.href} className="dashboard-kpi-card">
+                <div className="dashboard-kpi-head">
+                  <Icon size={16} />
+                  <span>{item.label}</span>
+                </div>
+                <div className="dashboard-kpi-value">
+                  <strong>{item.value}</strong>
+                  <span>{item.unit}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="dashboard-main-grid mt-5">
+          <section className="dashboard-panel compact">
+            <div className="dashboard-panel-title">
+              <span>管理入口</span>
             </div>
-          ))
-        )}
+            <div className="dashboard-queue">
+              {menuCards.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href} className="dashboard-queue-row">
+                    <Icon size={14} />
+                    <span>{item.label}</span>
+                    <strong>{item.desc}</strong>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="dashboard-panel tasks">
+            <div className="dashboard-panel-title">
+              <span>最近失败任务</span>
+              <Link href="/tasks">全部任务</Link>
+            </div>
+            <div className="dashboard-task-list">
+              {recentFailed.length === 0 && <p className="dashboard-empty">暂无失败任务。</p>}
+              {recentFailed.map((task) => (
+                <div key={task.id} className="dashboard-task-row">
+                  <AlertTriangle size={14} />
+                  <strong>{task.type}</strong>
+                  <span>{task.status}</span>
+                  <p>{task.user?.email} · {task.message.slice(0, 30)}</p>
+                  <time>{formatTime(task.createdAt)}</time>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </section>
     </AppShell>
   );

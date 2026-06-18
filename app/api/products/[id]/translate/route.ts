@@ -22,7 +22,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
 
   await prisma.product.update({
     where: { id: product.id },
-    data: { status: "translated" }
+    data: { status: "optimizing" }
   });
 
   return NextResponse.json({ task });

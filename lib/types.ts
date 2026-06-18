@@ -31,8 +31,8 @@ export interface Product {
   title: string;
   description: string;
   price: number;
-  source: "ozon" | "source_1688" | "manual";
-  status: "draft" | "translated" | "image_generated" | "video_generated" | "uploaded";
+  source: "ozon" | "ozon_market" | "source_1688" | "manual";
+  status: "discovered" | "optimizing" | "optimizing" | "optimized" | "published";
   images: string[];
   createdAt: string;
 }

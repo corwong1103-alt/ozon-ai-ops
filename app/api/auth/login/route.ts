@@ -29,6 +29,6 @@ export async function POST(request: Request) {
       status: user.status,
       plan: user.plan
     },
-    redirectTo: statusRedirect(user.status)
+    redirectTo: user.status === "approved" && user.role === "admin" ? "/admin" : statusRedirect(user.status)
   });
 }

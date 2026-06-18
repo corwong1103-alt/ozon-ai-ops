@@ -22,7 +22,7 @@ import {
 import { runBaseTranslationTask, runCreditAiTask } from "@/lib/services/ai";
 import { uploadProductToOzon } from "@/lib/services/ozon";
 
-const allowedSources = ["ozon", "source_1688", "manual"] as const;
+const allowedSources = ["ozon", "ozon_market", "source_1688", "manual"] as const;
 
 export async function createProduct(formData: FormData) {
   const user = await requireApprovedUser();
@@ -150,7 +150,7 @@ export async function translateProduct(productId: string) {
       metadata: { translated }
     }
   });
-  await prisma.product.update({ where: { id: productId }, data: { status: "translated" } });
+  await prisma.product.update({ where: { id: productId }, data: { status: "optimizing" } });
   revalidatePath(`/products/${productId}`);
   return {
     ok: true,
@@ -209,7 +209,7 @@ export async function generateProductImage(productId: string) {
       description: product.description,
       price: product.price.toString()
     }),
-    onSuccess: () => prisma.product.update({ where: { id: productId }, data: { status: "image_generated" } })
+    onSuccess: () => prisma.product.update({ where: { id: productId }, data: { status: "optimizing" } })
   });
   revalidatePath(`/products/${productId}`);
   revalidatePath("/credits");
@@ -235,7 +235,7 @@ export async function generateProductImageFromPrompt(productId: string, prompt: 
     kind: "image",
     message: `AI 商品图按提示词生成：${product.title}`,
     prompt: cleanPrompt,
-    onSuccess: () => prisma.product.update({ where: { id: productId }, data: { status: "image_generated" } })
+    onSuccess: () => prisma.product.update({ where: { id: productId }, data: { status: "optimizing" } })
   });
   revalidatePath(`/products/${productId}`);
   revalidatePath("/credits");
@@ -319,7 +319,7 @@ export async function addGeneratedImageToProduct(productId: string, imageUrl: st
     where: { id: product.id },
     data: {
       images: [url, ...currentImages],
-      status: "image_generated"
+      status: "optimizing"
     }
   });
   await prisma.taskLog.create({
@@ -370,10 +370,10 @@ export async function uploadProduct(productId: string, formData: FormData) {
       status: "queued",
       creditCost: 0,
       message: `上传到 Ozon mock adapter：${product.title}`,
-      metadata: adapterResult
+      metadata: JSON.parse(JSON.stringify(adapterResult))
     }
   });
-  await prisma.product.update({ where: { id: productId }, data: { storeId: store.id, status: "uploaded" } });
+  await prisma.product.update({ where: { id: productId }, data: { storeId: store.id, status: "published" } });
   revalidatePath(`/products/${productId}`);
   return {
     ok: true,

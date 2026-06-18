@@ -1,7 +1,10 @@
 import { AppShell } from "@/components/AppShell";
 import { OzonMarketPoolButton, OzonPoolButton } from "@/components/OzonPoolButton";
 import { ReliableProductImage } from "@/components/ReliableProductImage";
+import { ResearchTaskPoller } from "@/components/ResearchTaskPoller";
 import { ozonMarketCategories, type OzonMarketSearchResult } from "@/lib/services/ozon-market";
+import type { KeywordExpansionResult } from "@/lib/services/keyword-expander";
+import type { ScoredProduct } from "@/lib/services/product-scoring";
 import type { OzonProductImport } from "@/lib/services/ozon";
 
 type UserForShell = {
@@ -77,6 +80,10 @@ export function OzonResearchConsole({
   selectedStoreId,
   products,
   marketResult,
+  keywordExpansion,
+  scoredProducts,
+  pendingTaskId,
+  pendingKeyword,
   mode,
   error,
   searchParams
@@ -86,6 +93,10 @@ export function OzonResearchConsole({
   selectedStoreId?: string;
   products: OzonProductImport[];
   marketResult: OzonMarketSearchResult;
+  keywordExpansion?: KeywordExpansionResult;
+  scoredProducts?: ScoredProduct[];
+  pendingTaskId?: string;
+  pendingKeyword?: string;
   mode: "market" | "seller";
   error?: string;
   searchParams: Record<string, string | string[] | undefined>;
@@ -169,64 +180,137 @@ export function OzonResearchConsole({
             <button className="btn-primary">搜索真实市场商品</button>
           </form>
 
-          <div className={`research-source-panel ${marketResult.mode}`}>
-            <div>
-              <strong>{marketResult.sourceName}</strong>
-              <p>{marketResult.message}</p>
-            </div>
-            <a href="/integrations">配置 Ozon 市场数据源</a>
+          {/* 数据源 tab（Ozon / 1688 / Wildberries） */}
+          <div className="research-source-tabs">
+            <a className="active" href="/research/ozon?mode=market">Ozon</a>
+            <a className="disabled" title="1688 数据源待接入（P2 后续）">1688</a>
+            <a className="disabled" title="Wildberries 数据源待接入">Wildberries</a>
           </div>
 
-          {marketProducts.length > 0 && (
-            <div className="research-result-bar">
-              <p>结果来自你配置的真实市场数据源。商品图只使用接口返回的真实链接；无图商品不会被允许入池。</p>
-              <span>Top {marketProducts.length}</span>
-            </div>
-          )}
-
-          <div className="research-product-grid">
-            {marketProducts.map((product) => (
-              <article key={`${product.productId}_${product.sourceUrl || product.name}`} className="research-product-card">
-                <div className="research-product-media">
-                  <ReliableProductImage
-                    images={product.images}
-                    alt={product.name}
-                    className="h-full w-full object-contain"
-                    emptyLabel="市场源未返回图片"
-                  />
-                  <span>{product.salesRank ? `#${product.salesRank}` : `${product.images.length} 图`}</span>
+          {/* P2: AI 关键词扩展面板 */}
+          {keywordExpansion && (
+            <section className="research-ai-expansion">
+              <div className="research-ai-expansion-head">
+                <strong>AI 关键词扩展</strong>
+                <span>Qwen 识别 · 翻译 · 扩展</span>
+              </div>
+              <div className="research-ai-expansion-body">
+                <div>
+                  <span>原始词</span>
+                  <strong>{keywordExpansion.original}</strong>
+                  <em>语种：{keywordExpansion.detectedLanguage}</em>
                 </div>
-                <div className="research-product-body">
-                  <p>{product.category || "Ozon market"}</p>
-                  <h3>{product.name}</h3>
-                  <span>
-                    {product.rating ? `评分 ${product.rating}` : "评分未返回"}
-                    {product.reviewCount ? ` / ${product.reviewCount} 评论` : ""}
-                    {product.sellerName ? ` / ${product.sellerName}` : ""}
-                  </span>
-                </div>
-                <div className="research-product-foot">
+                {keywordExpansion.translatedRu && (
                   <div>
-                    <strong>{product.price}</strong>
-                    <small>{product.currency}</small>
+                    <span>俄语翻译</span>
+                    <strong>{keywordExpansion.translatedRu}</strong>
                   </div>
-                  <OzonMarketPoolButton product={product} />
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {marketProducts.length === 0 && (
-            <section className="research-empty-market">
-              <h3>这里暂时不会放假数据。</h3>
-              <p>要实现你要的“全 Ozon 范围、类目真实搜索、热销 Top10-20”，需要在 API 接入中心填写一个真实市场数据源。当前 Ozon Seller API 无法提供前台排名和全站搜索。</p>
-              <div>
-                <span>可接入来源</span>
-                <span>Ozon 前台采集服务</span>
-                <span>第三方榜单 API</span>
-                <span>自建搜索/爬虫服务</span>
+                )}
+                {keywordExpansion.keywords.filter((k) => k.source === "expanded").length > 0 && (
+                  <div>
+                    <span>扩展词</span>
+                    <div className="research-ai-tags">
+                      {keywordExpansion.keywords.filter((k) => k.source === "expanded").map((k) => (
+                        <em key={k.keyword}>{k.keyword}</em>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
+          )}
+
+          {pendingTaskId ? (
+            <ResearchTaskPoller taskId={pendingTaskId} keyword={pendingKeyword || keyword || ""} />
+          ) : (
+            <>
+              <div className={`research-source-panel ${marketResult.mode}`}>
+                <div>
+                  <strong>{marketResult.sourceName}</strong>
+                  <p>{marketResult.message}</p>
+                </div>
+                <a href="/integrations">配置 Ozon 市场数据源</a>
+              </div>
+
+              {marketProducts.length > 0 && (
+                <div className="research-result-bar">
+                  <p>结果来自你配置的真实市场数据源。商品图只使用接口返回的真实链接；无图商品不会被允许入池。</p>
+                  <span>Top {marketProducts.length}</span>
+                </div>
+              )}
+
+              <div className="research-product-grid">
+                {(scoredProducts?.length ? scoredProducts : marketProducts).map((product) => {
+                  const scores = "scores" in product ? (product as ScoredProduct).scores : null;
+                  return (
+                  <article key={`${product.productId}_${product.sourceUrl || product.name}`} className="research-product-card">
+                    <div className="research-product-media">
+                      <ReliableProductImage
+                        images={product.images}
+                        alt={product.name}
+                        className="h-full w-full object-contain"
+                        emptyLabel="市场源未返回图片"
+                      />
+                      <span>{product.salesRank ? `#${product.salesRank}` : `${product.images.length} 图`}</span>
+                    </div>
+                    <div className="research-product-body">
+                      <p>{product.category || "Ozon market"}</p>
+                      <h3>{product.name}</h3>
+                      <span>
+                        {product.rating ? `评分 ${product.rating}` : "评分未返回"}
+                        {product.reviewCount ? ` / ${product.reviewCount} 评论` : ""}
+                        {product.sellerName ? ` / ${product.sellerName}` : ""}
+                      </span>
+                      {scores && (
+                        <div className="research-scores">
+                          <div className="research-score" title="热度">
+                            <span>热度</span>
+                            <i style={{ width: `${scores.heat}%` }} />
+                            <em>{scores.heat}</em>
+                          </div>
+                          <div className="research-score" title="利润">
+                            <span>利润</span>
+                            <i style={{ width: `${scores.profit}%` }} />
+                            <em>{scores.profit}</em>
+                          </div>
+                          <div className="research-score" title="竞争（高=竞争激烈）">
+                            <span>竞争</span>
+                            <i style={{ width: `${scores.competition}%` }} />
+                            <em>{scores.competition}</em>
+                          </div>
+                          <div className="research-score recommend" title="推荐指数">
+                            <span>推荐</span>
+                            <i style={{ width: `${scores.recommend}%` }} />
+                            <em>{scores.recommend}</em>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="research-product-foot">
+                      <div>
+                        <strong>{product.price}</strong>
+                        <small>{product.currency}</small>
+                      </div>
+                      <OzonMarketPoolButton product={product} />
+                    </div>
+                  </article>
+                  );
+                })}
+              </div>
+
+              {marketProducts.length === 0 && (
+                <section className="research-empty-market">
+                  <h3>这里暂时不会放假数据。</h3>
+                  <p>要实现你要的“全 Ozon 范围、类目真实搜索、热销 Top10-20”，需要在 API 接入中心填写一个真实市场数据源。当前 Ozon Seller API 无法提供前台排名和全站搜索。</p>
+                  <div>
+                    <span>可接入来源</span>
+                    <span>Ozon 前台采集服务</span>
+                    <span>第三方榜单 API</span>
+                    <span>自建搜索/爬虫服务</span>
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </>
       )}

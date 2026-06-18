@@ -145,8 +145,9 @@ export function ProductUploadForm({
         ))}
       </select>
       <button className="btn-primary w-full" disabled={pending}>
-        {pending ? "处理中…" : "模拟上传到 Ozon"}
+        {pending ? "处理中…" : "上架到 Ozon（dry-run 模拟）"}
       </button>
+      <p className="text-xs text-steel">默认 dry-run 模式不真实写入 Ozon。设置 OZON_REAL_UPLOAD=true 开启真实上架。</p>
     </form>
   );
 }

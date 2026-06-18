@@ -3,34 +3,72 @@
 @tailwind utilities;
 
 :root {
-  --sand: 245 239 230;
-  --earth: 67 48 32;
-  --terracotta: 196 106 63;
-  --parchment: 250 246 242;
-  --clay: 224 204 184;
-  --dust: 180 156 132;
-  --spice: 184 102 52;
-  --charcoal: 44 32 20;
-  --wheat: 255 248 240;
-  --amber: 210 150 60;
-  --sage: 134 156 128;
-  --font-display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
-  --font-body: "Avenir Next", "PingFang SC", "Hiragino Sans GB", ui-sans-serif, system-ui, sans-serif;
+  /* 背景层（白/浅灰，Stripe 风） */
+  --sand: 255 255 255;
+  --parchment: 250 250 250;
+  --rail: 244 244 245;
+  --wheat: 255 255 255;
+  --cotton: 255 255 255;
+  --sky: 250 250 250;
+  --paper: 255 255 255;
+  /* 文字（近黑灰阶） */
+  --earth: 17 17 19;
+  --charcoal: 39 39 42;
+  --ink: 17 17 19;
+  --night: 17 17 19;
+  --steel: 115 115 119;
+  --dust: 161 161 170;
+  /* 边框（弱） */
+  --clay: 234 234 237;
+  --line: 234 234 237;
+  /* 强调色（Linear indigo-500） */
+  --terracotta: 99 102 241;
+  --accent: 99 102 241;
+  --accent-2: 129 140 248;
+  --rust: 99 102 241;
+  --violet: 129 140 248;
+  --spice: 99 102 241;
+  /* 语义色 */
+  --sage: 34 197 94;
+  --mint: 34 197 94;
+  --amber: 234 179 8;
+  --alert: 239 68 68;
+  /* 字体：去衬线，全无衬线（Linear/Vercel 风） */
+  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+}
 
-  /* backward-compat aliases — old class names map to new warm palette */
-  --ink: 67 48 32;
-  --paper: 245 239 230;
-  --rail: 245 239 230;
-  --line: 224 204 184;
-  --accent: 196 106 63;
-  --accent-2: 210 150 60;
-  --rust: 196 106 63;
-  --mint: 134 156 128;
-  --steel: 180 156 132;
-  --alert: 210 150 60;
-  --night: 44 32 20;
-  --cotton: 255 248 240;
-  --sky: 245 239 230;
+.dark {
+  /* 深色背景层（Linear 近黑） */
+  --sand: 10 10 11;
+  --parchment: 17 17 19;
+  --rail: 24 24 27;
+  --wheat: 17 17 19;
+  --cotton: 17 17 19;
+  --sky: 17 17 19;
+  --paper: 10 10 11;
+  /* 文字（近白灰阶） */
+  --earth: 235 235 238;
+  --charcoal: 228 228 231;
+  --ink: 235 235 238;
+  --night: 235 235 238;
+  --steel: 145 145 150;
+  --dust: 113 113 122;
+  /* 边框 */
+  --clay: 39 39 42;
+  --line: 39 39 42;
+  /* 强调色（紫亮） */
+  --terracotta: 129 140 248;
+  --accent: 129 140 248;
+  --accent-2: 165 180 252;
+  --rust: 129 140 248;
+  --violet: 165 180 252;
+  --spice: 129 140 248;
+  /* 语义色 */
+  --sage: 74 222 128;
+  --mint: 74 222 128;
+  --amber: 250 204 21;
+  --alert: 248 113 113;
 }
 
 * {
@@ -76,11 +114,10 @@ textarea:focus-visible {
 /* ── Cards ── */
 
 .ledger-card {
-  border: 1px solid rgb(var(--clay) / 0.7);
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgb(var(--parchment)), rgb(var(--wheat) / 0.88));
-  box-shadow: 0 4px 24px rgb(var(--earth) / 0.06), 0 1px 3px rgb(var(--earth) / 0.04);
+  border: 1px solid rgb(var(--clay));
+  border-radius: 8px;
+  background: rgb(var(--wheat));
+  box-shadow: 0 1px 2px rgb(var(--earth) / 0.04);
   position: relative;
   overflow: hidden;
 }
@@ -607,6 +644,11 @@ textarea:focus-visible {
   color: rgb(var(--terracotta));
 }
 
+.pool-source.source-ozon_market {
+  background: rgb(var(--sage) / 0.16);
+  color: rgb(var(--earth));
+}
+
 .pool-source.source-source_1688 {
   background: rgb(var(--amber) / 0.14);
   color: rgb(var(--spice));
@@ -1060,6 +1102,292 @@ textarea:focus-visible {
   color: rgb(var(--terracotta));
   font-size: 0.8rem;
   font-weight: 950;
+}
+
+.research-loading {
+  margin-top: 0.85rem;
+  border: 1px solid rgb(var(--clay) / 0.5);
+  border-radius: 16px;
+  background: rgb(var(--parchment) / 0.72);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.research-loading h3 {
+  font-family: var(--font-display);
+  color: rgb(var(--earth));
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin: 0.5rem 0 0;
+}
+
+.research-loading p {
+  margin: 0;
+  color: rgb(var(--steel));
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.research-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgb(var(--clay) / 0.25);
+  border-top-color: rgb(var(--earth));
+  border-radius: 50%;
+  animation: research-spin 0.9s linear infinite;
+}
+
+@keyframes research-spin {
+  to { transform: rotate(360deg); }
+}
+
+.research-source-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.research-source-tabs a {
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid rgb(var(--clay) / 0.4);
+  color: rgb(var(--steel));
+  background: rgb(var(--parchment) / 0.5);
+}
+.research-source-tabs a.active {
+  background: rgb(var(--earth));
+  color: rgb(var(--wheat));
+  border-color: rgb(var(--earth));
+}
+.research-source-tabs a.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.research-ai-expansion {
+  margin-top: 0.75rem;
+  border: 1px solid rgb(var(--sage) / 0.5);
+  border-radius: 12px;
+  background: rgb(var(--sage) / 0.06);
+  padding: 0.85rem 1rem;
+}
+.research-ai-expansion-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.research-ai-expansion-head strong {
+  font-family: var(--font-display);
+  color: rgb(var(--earth));
+  font-size: 0.95rem;
+}
+.research-ai-expansion-head span {
+  font-size: 0.7rem;
+  color: rgb(var(--sage));
+  font-weight: 700;
+}
+.research-ai-expansion-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+.research-ai-expansion-body > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.research-ai-expansion-body span {
+  font-size: 0.7rem;
+  color: rgb(var(--steel));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.research-ai-expansion-body strong {
+  font-size: 0.95rem;
+  color: rgb(var(--ink));
+}
+.research-ai-expansion-body em {
+  font-size: 0.7rem;
+  color: rgb(var(--steel));
+  font-style: normal;
+}
+.research-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.research-ai-tags em {
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: rgb(var(--sage) / 0.15);
+  color: rgb(var(--earth));
+  font-size: 0.75rem;
+}
+
+.research-scores {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.research-score {
+  display: grid;
+  grid-template-columns: 40px 1fr 28px;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+}
+.research-score span {
+  color: rgb(var(--steel));
+  font-weight: 600;
+}
+.research-score i {
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(var(--amber));
+  min-width: 2px;
+}
+.research-score em {
+  font-style: normal;
+  font-weight: 700;
+  color: rgb(var(--earth));
+  text-align: right;
+}
+.research-score.recommend i {
+  background: rgb(var(--sage));
+}
+
+.lifecycle-node {
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid rgb(var(--clay) / 0.4);
+  background: rgb(var(--parchment) / 0.5);
+  color: rgb(var(--steel));
+}
+.lifecycle-node.done {
+  background: rgb(var(--sage) / 0.2);
+  color: rgb(var(--sage));
+  border-color: rgb(var(--sage) / 0.5);
+}
+.lifecycle-node.current {
+  background: rgb(var(--earth));
+  color: rgb(var(--wheat));
+  border-color: rgb(var(--earth));
+}
+.lifecycle-bar {
+  width: 1.5rem;
+  height: 2px;
+  background: rgb(var(--clay) / 0.4);
+}
+.lifecycle-bar.done {
+  background: rgb(var(--sage) / 0.6);
+}
+
+.ai-studio-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  border-bottom: 2px solid rgb(var(--clay) / 0.3);
+}
+.ai-studio-tab {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: rgb(var(--steel));
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+}
+.ai-studio-tab.active {
+  color: rgb(var(--earth));
+  border-bottom-color: rgb(var(--earth));
+}
+.ai-studio-panel {
+  margin-top: 1.5rem;
+}
+.ai-studio-form {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 640px;
+}
+.ai-studio-form label {
+  display: grid;
+  gap: 0.3rem;
+}
+.ai-studio-form label span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(var(--steel));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ai-studio-hint {
+  font-size: 0.85rem;
+  color: rgb(var(--steel));
+  margin: 0;
+}
+.ai-studio-result {
+  margin-top: 0.5rem;
+  border: 1px solid rgb(var(--sage) / 0.5);
+  border-radius: 8px;
+  background: rgb(var(--sage) / 0.06);
+  padding: 0.85rem;
+}
+.ai-studio-result-title {
+  font-weight: 700;
+  color: rgb(var(--sage));
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+.ai-studio-result-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0;
+  color: rgb(var(--ink));
+}
+.ai-studio-result-image img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+}
+.ai-studio-error {
+  margin-top: 0.5rem;
+  border: 1px solid rgb(var(--terracotta) / 0.5);
+  border-radius: 8px;
+  background: rgb(var(--terracotta) / 0.06);
+  padding: 0.75rem;
+  color: rgb(var(--terracotta));
+  font-size: 0.85rem;
+}
+.ai-studio-placeholder {
+  border: 1px dashed rgb(var(--clay) / 0.5);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  color: rgb(var(--steel));
+}
+.ai-studio-placeholder h3 {
+  font-family: var(--font-display);
+  color: rgb(var(--earth));
+  margin: 0 0 0.5rem;
+}
+.ai-studio-placeholder ul {
+  text-align: left;
+  display: inline-block;
+  margin: 0.5rem auto;
 }
 
 .research-empty-market {
@@ -2563,6 +2891,25 @@ textarea:focus-visible {
 
 .integration-test-row {
   margin-top: 10px;
+}
+
+.integration-debug-wrap {
+  margin-top: 10px;
+}
+
+.integration-debug-output {
+  margin-top: 10px;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid rgb(var(--clay) / 0.55);
+  border-radius: 12px;
+  background: rgb(var(--charcoal) / 0.94);
+  padding: 12px;
+  color: rgb(var(--wheat));
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .integration-foot {

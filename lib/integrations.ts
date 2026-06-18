@@ -45,21 +45,15 @@ export const integrationDefinitions: IntegrationDefinition[] = [
   },
   {
     provider: "ozon_market",
-    name: "Ozon 市场搜索 / 热销榜数据源",
-    shortName: "Ozon 市场",
-    description: "用于真实搜索 Ozon 全站商品、类目商品和 Top10-20 热销榜。未接入前不能伪造全站搜索结果。",
-    secretLabel: "市场数据 API Key / Token",
-    secretPlaceholder: "第三方 Ozon 市场数据源或采集服务 Token",
-    help: "Seller API 只能读你店铺可见商品；全 Ozon 搜索必须接 Ozon 前台采集服务、第三方榜单 API，或你自己的市场数据接口。",
+    name: "Apify Ozon Market",
+    shortName: "Apify Ozon",
+    description: "用于真实搜索 Ozon 全站商品、类目商品和商品详情，并把结果加入商品池。",
+    secretLabel: "Apify API Token",
+    secretPlaceholder: "apify_api_xxxxxxxxxxxx",
+    help: "在 Apify 账号 Settings / Integrations 中复制 API Token；Actor ID 默认使用 zen-studio/ozon-scraper-pro，可按实际购买的 Actor 修改。",
     fields: [
-      { name: "apiBaseUrl", label: "API Base URL", placeholder: "https://你的市场数据服务.com/api", required: true },
-      { name: "searchPath", label: "搜索路径", placeholder: "/ozon/search", required: true },
-      { name: "queryParam", label: "关键词参数名", placeholder: "q" },
-      { name: "categoryParam", label: "类目参数名", placeholder: "category" },
-      { name: "limitParam", label: "数量参数名", placeholder: "limit" },
-      { name: "authHeader", label: "鉴权 Header", placeholder: "Authorization" },
-      { name: "authScheme", label: "鉴权前缀", placeholder: "Bearer" },
-      { name: "resultPath", label: "结果数组路径", placeholder: "data.items / result.products / items" }
+      { name: "actorId", label: "Actor ID", placeholder: "zen-studio/ozon-scraper-pro", required: true },
+      { name: "maxItems", label: "默认搜索数量", placeholder: "20" }
     ]
   },
   {

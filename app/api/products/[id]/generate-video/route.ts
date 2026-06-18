@@ -21,7 +21,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
     message: `AI 视频生成完成：${product.title}`,
     onSuccess: () => prisma.product.update({
       where: { id: product.id },
-      data: { status: "video_generated" }
+      data: { status: "optimized" }
     })
   });
 

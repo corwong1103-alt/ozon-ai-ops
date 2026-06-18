@@ -68,7 +68,7 @@ export async function prepareFullSiteTest() {
         ].join("\n"),
         price: item.price,
         images: item.images,
-        status: "draft" as const
+        status: "discovered" as const
       };
 
       if (existing) {

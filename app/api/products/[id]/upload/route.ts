@@ -47,6 +47,27 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const adapterResult = await uploadProductToOzon({ store, product });
 
+  // 上架前检查未通过 → 阻止上架，商品状态不变
+  if (adapterResult.mode === "blocked") {
+    const task = await prisma.taskLog.create({
+      data: {
+        userId: user.id,
+        productId: product.id,
+        storeId: store.id,
+        type: "upload",
+        status: "failed",
+        creditCost: 0,
+        message: `上架前检查未通过：${adapterResult.checklist.filter((c) => !c.passed).map((c) => c.label).join("、")}`,
+        metadata: JSON.parse(JSON.stringify(adapterResult))
+      }
+    });
+    return NextResponse.json({ error: "上架前检查未通过", checklist: adapterResult.checklist, task }, { status: 400 });
+  }
+
+  const statusMsg = adapterResult.mode === "real"
+    ? `真实上架到 Ozon：${product.title} -> ${store.name}`
+    : `模拟上架（dry-run）成功：${product.title} -> ${store.name}。设置 OZON_REAL_UPLOAD=true 开启真实写入。`;
+
   const [task] = await prisma.$transaction([
     prisma.taskLog.create({
       data: {
@@ -54,17 +75,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
         productId: product.id,
         storeId: store.id,
         type: "upload",
-        status: "queued",
+        status: adapterResult.mode === "real" && adapterResult.error ? "failed" : "success",
         creditCost: 0,
-        message: `上传任务已创建：${product.title} -> ${store.name}`,
-        metadata: adapterResult
+        message: statusMsg,
+        metadata: JSON.parse(JSON.stringify(adapterResult))
       }
     }),
     prisma.product.update({
       where: { id: product.id },
-      data: { storeId: store.id, status: "uploaded" }
+      data: { storeId: store.id, status: "published" }
     })
   ]);
 
-  return NextResponse.json({ task });
+  return NextResponse.json({ task, mode: adapterResult.mode, checklist: adapterResult.checklist });
 }

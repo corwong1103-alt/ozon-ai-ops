@@ -27,16 +27,20 @@ enum UserPlan {
 
 enum ProductSource {
   ozon
+  ozon_market
   source_1688 @map("1688")
   manual
 }
 
+/// V3 商品生命周期 7 阶段
 enum ProductStatus {
-  draft
-  translated
-  image_generated
-  video_generated
-  uploaded
+  discovered        // 发现（原 draft）
+  favorited         // 收藏
+  optimizing        // 优化中（原 translated/image_generated）
+  optimized         // 已优化（原 video_generated）
+  ready_to_publish  // 待发布
+  published         // 已发布（原 uploaded）
+  promoted          // 已推广
 }
 
 enum SocialPlatform {
@@ -56,11 +60,14 @@ enum SocialMediaType {
   video
 }
 
+/// V3 内容中心 5 阶段状态机 + failed
 enum SocialPostStatus {
-  draft
-  queued
-  published
-  failed
+  draft          // 草稿
+  pending_review // 待审核
+  ready          // 待发布
+  published      // 已发布
+  scheduled      // 定时发布
+  failed         // 发布失败
 }
 
 enum IntegrationProvider {
@@ -133,6 +140,7 @@ model User {
   customerMessages CustomerMessage[]
   adminActions    AdminActionLog[] @relation("AdminActions")
   targetActions   AdminActionLog[] @relation("TargetUserActions")
+  researchTasks   ResearchTask[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -210,7 +218,7 @@ model Product {
   description String
   price       Decimal       @db.Decimal(12, 2)
   images      Json          @default("[]")
-  status      ProductStatus @default(draft)
+  status      ProductStatus @default(discovered)
   socialPosts SocialPost[]
   taskLogs    TaskLog[]
   createdAt   DateTime      @default(now())
@@ -245,11 +253,14 @@ model SocialPost {
   content   String
   mediaType SocialMediaType
   status    SocialPostStatus @default(draft)
+  scheduledAt DateTime?
+  publishedAt DateTime?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
   @@index([userId])
   @@index([productId])
+  @@index([status])
 }
 
 model CustomerMessage {
@@ -305,4 +316,46 @@ model AdminActionLog {
 
   @@index([adminId])
   @@index([targetUserId])
+}
+
+/// Ozon 市场搜索结果缓存。keyword+category 组合为唯一键，TTL 24h。
+/// P0-1：同关键词重复搜索直接命中缓存，跳过 Apify 调用。
+model MarketSearchCache {
+  id           String   @id @default(cuid())
+  keyword      String
+  category     String   @default("")
+  result       Json
+  productCount Int
+  source       String   @default("apify")
+  hitCount     Int      @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([keyword, category])
+  @@index([keyword])
+  @@index([expiresAt])
+}
+
+/// Ozon 市场搜索异步任务。P0-2：首次搜索不阻塞页面，后台执行 Apify。
+/// 复用 TaskStatus enum（queued/processing/success/failed）。
+model ResearchTask {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyword      String
+  category     String      @default("")
+  status       TaskStatus  @default(queued)
+  result       Json?
+  productCount Int?
+  errorMessage String?
+  apifyRunId   String?
+  fromCache    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([keyword])
+  @@index([keyword, category, status])
 }

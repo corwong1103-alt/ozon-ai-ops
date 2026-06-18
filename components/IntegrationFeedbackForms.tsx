@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, TestTube2 } from "lucide-react";
-import { saveIntegration, testDashscopeIntegration } from "@/app/integrations/actions";
+import { saveIntegration, testDashscopeIntegration, testOzonMarketIntegration } from "@/app/integrations/actions";
 import { useToast } from "@/components/Toast";
 
 type IntegrationField = {
@@ -123,5 +123,49 @@ export function DashscopeTestForm() {
         {pending ? "测试中…" : "保存后测试百炼文本模型"}
       </button>
     </form>
+  );
+}
+
+export function OzonMarketTestForm() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [debugOutput, setDebugOutput] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <div className="integration-debug-wrap">
+      <form
+        className="integration-test-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setDebugOutput("Actor 启动中，最多等待 30 秒...");
+          startTransition(async () => {
+            try {
+              const result = await testOzonMarketIntegration();
+              setDebugOutput(result?.debug || result?.message || "没有返回调试信息。");
+              if (result?.ok) {
+                toast("success", result.message || "Apify Ozon Market 连接成功。");
+                router.refresh();
+                return;
+              }
+              toast("error", result?.message || "Apify Ozon Market 测试失败。");
+              router.refresh();
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Apify Ozon Market 测试失败。";
+              setDebugOutput(JSON.stringify({ error: message }, null, 2));
+              toast("error", message);
+            }
+          });
+        }}
+      >
+        <button className="btn-secondary" disabled={pending}>
+          <TestTube2 size={16} />
+          {pending ? "测试中，最多30秒…" : "保存后测试 backpack 搜索"}
+        </button>
+      </form>
+      {debugOutput && (
+        <pre className="integration-debug-output">{debugOutput}</pre>
+      )}
+    </div>
   );
 }

@@ -8,17 +8,20 @@ import { createProduct } from "./actions";
 
 const sourceLabel = {
   ozon: "Ozon",
+  ozon_market: "Ozon 市场",
   source_1688: "1688",
   manual: "手动"
 } as const;
 
-const statusLabel = {
-  draft: "待处理",
-  translated: "已翻译",
-  image_generated: "已出图",
-  video_generated: "已出视频",
-  uploaded: "已上传"
-} as const;
+const statusLabel: Record<string, string> = {
+  discovered: "发现",
+  favorited: "已收藏",
+  optimizing: "优化中",
+  optimized: "已优化",
+  ready_to_publish: "待发布",
+  published: "已上架",
+  promoted: "已推广"
+};
 
 function readDescriptionValue(description: string, label: string) {
   const line = description
@@ -29,13 +32,16 @@ function readDescriptionValue(description: string, label: string) {
   return line?.split(":").slice(1).join(":").trim() || "";
 }
 
-function productStage(status: keyof typeof statusLabel, imageCount: number) {
-  if (status === "uploaded") return "已完成上架链路";
-  if (status === "video_generated") return "可做社媒视频";
-  if (status === "image_generated") return "可生成视频/社媒";
-  if (status === "translated") return "可生成商品图";
-  if (imageCount === 0) return "先补真实图片";
-  return "待翻译/优化";
+function productStage(status: string, imageCount: number) {
+  if (status === "promoted") return "已推广，回流成交中";
+  if (status === "published") return "已上架 Ozon";
+  if (status === "ready_to_publish") return "待发布上架";
+  if (status === "optimized") return "已优化，待发布";
+  if (status === "optimizing") return "AI 优化中";
+  if (status === "favorited") return "已收藏，待处理";
+  if (status === "discovered" && imageCount === 0) return "先补真实图片";
+  if (status === "discovered") return "待优化";
+  return "待处理";
 }
 
 export default async function ProductsPage() {
@@ -54,18 +60,18 @@ export default async function ProductsPage() {
     const bProductId = readDescriptionValue(b.description, "Ozon Product ID");
     const score = (product: typeof a, imageCount: number, offerId: string, productId: string) =>
       (imageCount > 0 ? 100 : 0) +
-      (product.source === "ozon" ? 35 : 0) +
+      (product.source === "ozon" || product.source === "ozon_market" ? 35 : 0) +
       (offerId ? 18 : 0) +
       (productId ? 18 : 0) +
-      (product.status === "draft" ? 4 : 0);
+      (product.status === "discovered" ? 4 : 0);
     const scoreDiff = score(b, bImages, bOffer, bProductId) - score(a, aImages, aOffer, aProductId);
     if (scoreDiff !== 0) return scoreDiff;
     return b.updatedAt.getTime() - a.updatedAt.getTime();
   });
   const total = products.length;
-  const ozonCount = products.filter((product) => product.source === "ozon").length;
+  const ozonCount = products.filter((product) => product.source === "ozon" || product.source === "ozon_market").length;
   const imageReadyCount = products.filter((product) => imageList(product.images).length > 0).length;
-  const draftCount = products.filter((product) => product.status === "draft").length;
+  const draftCount = products.filter((product) => product.status === "discovered").length;
 
   return (
     <AppShell title="商品池" eyebrow="真实货盘" user={user}>
@@ -114,6 +120,8 @@ export default async function ProductsPage() {
             const ozonProductId = readDescriptionValue(product.description, "Ozon Product ID");
             const currency = readDescriptionValue(product.description, "Currency") || "CNY";
             const imageSource = readDescriptionValue(product.description, "Image source");
+            const rating = readDescriptionValue(product.description, "Rating");
+            const reviews = readDescriptionValue(product.description, "Reviews");
             const stage = productStage(product.status, images.length);
 
             return (
@@ -136,6 +144,12 @@ export default async function ProductsPage() {
                     <span>Product: {ozonProductId || "手动/待同步"}</span>
                     <span>{imageSource ? "真实图源" : "图源待确认"}</span>
                   </div>
+                  {(rating || reviews) && (
+                    <div className="pool-row-meta">
+                      {rating && <span>AI评分 {rating}</span>}
+                      {reviews && <span>销量代理 {reviews} 评论</span>}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pool-row-price">
@@ -169,6 +183,7 @@ export default async function ProductsPage() {
               <select className="field" name="source" defaultValue="manual">
                 <option value="manual">manual</option>
                 <option value="ozon">ozon</option>
+                <option value="ozon_market">ozon_market</option>
                 <option value="source_1688">1688</option>
               </select>
             </label>

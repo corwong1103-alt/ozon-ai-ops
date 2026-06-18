@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         ].join("\n"),
         price: item.price,
         images: item.images,
-        status: "draft" as const
+        status: "discovered" as const
       };
 
       if (existing) {

@@ -69,6 +69,29 @@ async function main() {
     }
   });
 
+  const seller = await prisma.user.upsert({
+    where: { email: "seller@demo.com" },
+    update: {
+      status: "approved",
+      plan: "pro"
+    },
+    create: {
+      email: "seller@demo.com",
+      passwordHash: hashPassword("demo123456"),
+      role: "user",
+      status: "approved",
+      plan: "pro",
+      expiresAt: new Date("2026-12-31"),
+      credits: {
+        create: {
+          imageCredits: 500,
+          videoCredits: 50,
+          monthlyResetAt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+        }
+      }
+    }
+  });
+
   const pendingUser = await prisma.user.upsert({
     where: { email: "pending@demo.com" },
     update: { status: "pending" },
@@ -116,7 +139,7 @@ async function main() {
       description: "带温度显示，适合通勤、户外和礼品场景。",
       price: 29.8,
       images: [],
-      status: "draft"
+      status: "discovered"
     },
     create: {
       id: "seed_product_bottle",
@@ -127,7 +150,7 @@ async function main() {
       description: "带温度显示，适合通勤、户外和礼品场景。",
       price: 29.8,
       images: [],
-      status: "draft"
+      status: "discovered"
     }
   });
 

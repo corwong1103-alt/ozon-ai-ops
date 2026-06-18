@@ -401,15 +401,105 @@ export async function getOzonOrdersForImport(store: { ozonClientId: string; apiK
   return fetchOzonOrderImports({ ozonClientId: store.ozonClientId, apiKey }, limit);
 }
 
-export async function uploadProductToOzon(input: OzonUploadInput) {
-  const apiKey = decryptSecret(input.store.apiKeyEncrypted);
+export type UploadChecklistItem = { key: string; label: string; passed: boolean; detail: string };
+export type UploadResult = {
+  mode: "dry-run" | "real" | "blocked";
+  ozonStoreId: string;
+  ozonClientId: string;
+  apiKeyLoaded: boolean;
+  externalId?: string;
+  productTitle: string;
+  checklist: UploadChecklistItem[];
+  checklistPassed: boolean;
+  realUploadEnabled: boolean;
+  apiResponse?: unknown;
+  error?: string;
+};
 
-  return {
-    mode: "mock-adapter",
-    ozonStoreId: input.store.ozonStoreId,
-    ozonClientId: input.store.ozonClientId,
-    apiKeyLoaded: Boolean(apiKey),
-    externalId: `mock_ozon_${Date.now()}`,
-    productTitle: input.product.title
-  };
+export function buildUploadChecklist(product: OzonUploadInput["product"]): UploadChecklistItem[] {
+  const images = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
+  const hasCyrillic = /[Ѐ-ӿ]/.test(product.title || "") || /[Ѐ-ӿ]/.test(product.description || "");
+  const price = Number(product.price);
+  return [
+    { key: "title", label: "商品标题", passed: Boolean(product.title?.trim()), detail: product.title ? "已填写" : "缺失" },
+    { key: "cyrillic", label: "俄文文案", passed: hasCyrillic, detail: hasCyrillic ? "标题/描述含俄文" : "标题或描述需含俄文（Ozon 俄语站）" },
+    { key: "description", label: "商品描述", passed: Boolean(product.description?.trim()), detail: product.description ? "已填写" : "缺失" },
+    { key: "price", label: "价格 > 0", passed: price > 0, detail: price > 0 ? `${price}` : "未设价格" },
+    { key: "images", label: "至少 1 张图", passed: images.length > 0, detail: `${images.length} 张` }
+  ];
+}
+
+export async function uploadProductToOzon(input: OzonUploadInput): Promise<UploadResult> {
+  const apiKey = decryptSecret(input.store.apiKeyEncrypted);
+  const checklist = buildUploadChecklist(input.product);
+  const checklistPassed = checklist.every((item) => item.passed);
+  const realUploadEnabled = process.env.OZON_REAL_UPLOAD === "true";
+
+  // 检查未通过 → 阻止上架
+  if (!checklistPassed) {
+    return {
+      mode: "blocked",
+      ozonStoreId: input.store.ozonStoreId,
+      ozonClientId: input.store.ozonClientId,
+      apiKeyLoaded: Boolean(apiKey),
+      productTitle: input.product.title,
+      checklist,
+      checklistPassed: false,
+      realUploadEnabled
+    };
+  }
+
+  // dry-run 模式（默认）：不真实写入 Ozon，返回模拟成功
+  if (!realUploadEnabled) {
+    return {
+      mode: "dry-run",
+      ozonStoreId: input.store.ozonStoreId,
+      ozonClientId: input.store.ozonClientId,
+      apiKeyLoaded: Boolean(apiKey),
+      externalId: `dryrun_${Date.now()}`,
+      productTitle: input.product.title,
+      checklist,
+      checklistPassed: true,
+      realUploadEnabled: false
+    };
+  }
+
+  // 真实模式：调 Ozon /v3/product/create（需类目属性，当前缺类目配置会返回提示）
+  try {
+    const response = await postOzon("/v3/product/create", {
+      ozonClientId: input.store.ozonClientId,
+      apiKey: apiKey || ""
+    }, {
+      offer_id: `ozonai_${Date.now()}`,
+      name: input.product.title,
+      description: input.product.description,
+      price: Number(input.product.price),
+      // 注：完整上架需 category_id + attributes + images 数组，当前简化
+      images: Array.isArray(input.product.images) ? input.product.images.slice(0, 15) : []
+    });
+    return {
+      mode: "real",
+      ozonStoreId: input.store.ozonStoreId,
+      ozonClientId: input.store.ozonClientId,
+      apiKeyLoaded: Boolean(apiKey),
+      externalId: `ozon_${Date.now()}`,
+      productTitle: input.product.title,
+      checklist,
+      checklistPassed: true,
+      realUploadEnabled: true,
+      apiResponse: response
+    };
+  } catch (error) {
+    return {
+      mode: "real",
+      ozonStoreId: input.store.ozonStoreId,
+      ozonClientId: input.store.ozonClientId,
+      apiKeyLoaded: Boolean(apiKey),
+      productTitle: input.product.title,
+      checklist,
+      checklistPassed: true,
+      realUploadEnabled: true,
+      error: error instanceof Error ? error.message : "Ozon API 调用失败"
+    };
+  }
 }

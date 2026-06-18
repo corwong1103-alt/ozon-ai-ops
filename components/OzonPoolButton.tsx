@@ -63,7 +63,7 @@ export function OzonMarketPoolButton({
           try {
             const result = await addOzonMarketProductToPool(product);
             if (result?.ok) {
-              toast("success", result.message || `市场商品已成功入池：${product.name}`);
+              toast("success", result.message || `市场商品已成功入池：${product.title}`);
               router.refresh();
               return;
             }

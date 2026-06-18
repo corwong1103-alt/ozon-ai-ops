@@ -27,7 +27,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
     }),
     onSuccess: () => prisma.product.update({
       where: { id: product.id },
-      data: { status: "image_generated" }
+      data: { status: "optimizing" }
     })
   });
 

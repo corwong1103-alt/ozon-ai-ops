@@ -71,7 +71,7 @@ export async function addOzonProductToPool(productId: string, storeId: string) {
     description: ozonProductDescription(ozonProduct),
     price: ozonProduct.price,
     images: ozonProduct.images,
-    status: "draft" as const
+    status: "discovered" as const
   };
   const product = existing
     ? await prisma.product.update({ where: { id: existing.id }, data })
@@ -110,28 +110,29 @@ export async function addOzonProductToPool(productId: string, storeId: string) {
 
 function ozonMarketProductDescription(product: OzonMarketProduct) {
   return [
-    `Ozon Market Product ID: ${product.productId}`,
-    product.sourceUrl ? `Source URL: ${product.sourceUrl}` : "",
+    `Ozon Market Product ID: ${product.externalId}`,
+    product.productUrl ? `Source URL: ${product.productUrl}` : "",
     product.category ? `Category: ${product.category}` : "",
-    product.sellerName ? `Seller: ${product.sellerName}` : "",
-    product.salesRank ? `Market Rank: ${product.salesRank}` : "",
+    product.seller ? `Seller: ${product.seller}` : "",
     product.rating ? `Rating: ${product.rating}` : "",
     product.reviewCount ? `Reviews: ${product.reviewCount}` : "",
-    "Image source: Ozon market data provider / real returned image links"
+    "Source: Apify Ozon Market",
+    "Image source: Apify returned real Ozon image links"
   ].filter(Boolean).join("\n");
 }
 
 export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
   const user = await requireApprovedUser();
 
-  if (!product.productId || !product.name) {
+  if (!product.externalId || !product.title) {
     return {
       ok: false,
       message: "入池失败：市场数据源没有返回商品 ID 或标题。"
     };
   }
 
-  if (!product.images.length) {
+  const images = product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : [];
+  if (!images.length) {
     return {
       ok: false,
       message: "入池失败：这个市场商品没有真实图片链接，不能进入商品池。"
@@ -141,20 +142,20 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
   const existing = await prisma.product.findFirst({
     where: {
       userId: user.id,
-      source: "ozon",
+      source: "ozon_market",
       description: {
-        contains: `Ozon Market Product ID: ${product.productId}`
+        contains: `Ozon Market Product ID: ${product.externalId}`
       }
     }
   });
   const data = {
     userId: user.id,
-    source: "ozon" as const,
-    title: product.name,
+    source: "ozon_market" as const,
+    title: product.title,
     description: ozonMarketProductDescription(product),
-    price: product.price,
-    images: product.images,
-    status: "draft" as const
+    price: product.price ?? 0,
+    images,
+    status: "discovered" as const
   };
   const pooledProduct = existing
     ? await prisma.product.update({ where: { id: existing.id }, data })
@@ -167,15 +168,15 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
       type: "research",
       status: "success",
       creditCost: 0,
-      message: `已将 Ozon 市场商品加入商品池：${product.name}`,
+      message: `已将 Ozon 市场商品加入商品池：${product.title}`,
       metadata: {
-        source: "ozon_market",
-        productId: product.productId,
-        sourceUrl: product.sourceUrl,
-        imageCount: product.images.length,
-        salesRank: product.salesRank,
+        source: "apify_ozon_market",
+        externalId: product.externalId,
+        productUrl: product.productUrl,
+        imageCount: images.length,
         rating: product.rating,
-        reviewCount: product.reviewCount
+        reviewCount: product.reviewCount,
+        seller: product.seller
       }
     }
   });
@@ -187,7 +188,7 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct) {
   return {
     ok: true,
     message: existing
-      ? `市场商品已更新入池：${product.name}`
-      : `市场商品已成功入池：${product.name}`
+      ? `市场商品已更新入池：${product.title}`
+      : `市场商品已成功入池：${product.title}`
   };
 }

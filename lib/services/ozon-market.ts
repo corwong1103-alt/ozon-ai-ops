@@ -1,11 +1,21 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
 import { decryptSecret } from "@/lib/crypto";
 import { readPublicConfig } from "@/lib/integrations";
+import {
+  normalizeApifyOzonProduct,
+  toOzonMarketUiProduct,
+  type OzonMarketProduct,
+  type OzonMarketUiProduct
+} from "@/lib/ozon-market-normalizer";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_LIMIT = 20;
+const DEFAULT_ACTOR_ID = "zen-studio/ozon-scraper-pro";
+const APIFY_BASE_URL = "https://api.apify.com/v2";
+const FINAL_RUN_STATUSES = new Set(["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"]);
+
+export type { OzonMarketProduct };
 
 export type OzonMarketCategory = {
   id: string;
@@ -14,146 +24,49 @@ export type OzonMarketCategory = {
   keywords: string[];
 };
 
-export type OzonMarketProduct = {
-  productId: string;
-  name: string;
-  price: number;
-  currency: string;
-  images: string[];
-  sourceUrl?: string;
-  category?: string;
-  rating?: number;
-  reviewCount?: number;
-  salesRank?: number;
-  sellerName?: string;
-};
-
 export type OzonMarketSearchResult = {
   mode: "configured" | "unconfigured" | "error";
   sourceName: string;
   message: string;
-  products: OzonMarketProduct[];
+  products: OzonMarketUiProduct[];
 };
 
 export const ozonMarketCategories: OzonMarketCategory[] = [
   { id: "", label: "全部类目", ruLabel: "Все категории", keywords: [] },
-  { id: "beauty_hair", label: "美妆个护 / 头发护理", ruLabel: "Красота / Уход за волосами", keywords: ["волос", "шампунь", "сыворотка", "маска для волос", "生发", "护发"] },
-  { id: "beauty_skin", label: "美妆个护 / 面部护理", ruLabel: "Красота / Уход за лицом", keywords: ["кожа", "лицо", "крем", "сыворотка для лица", "护肤", "面霜"] },
-  { id: "home_kitchen", label: "家居厨房", ruLabel: "Дом и кухня", keywords: ["дом", "кухня", "посуда", "органайзер", "家居", "厨房"] },
-  { id: "electronics", label: "数码电子", ruLabel: "Электроника", keywords: ["смартфон", "зарядка", "usb", "наушники", "数码", "电子"] },
-  { id: "kids", label: "母婴儿童", ruLabel: "Детские товары", keywords: ["детский", "ребенок", "игрушка", "baby", "母婴", "儿童"] },
-  { id: "auto", label: "汽车用品", ruLabel: "Автотовары", keywords: ["авто", "машина", "держатель", "автомобильный", "汽车", "车载"] },
-  { id: "fashion", label: "服饰配件", ruLabel: "Одежда и аксессуары", keywords: ["одежда", "обувь", "сумка", "аксессуар", "服饰", "鞋"] },
-  { id: "sports", label: "运动户外", ruLabel: "Спорт и отдых", keywords: ["спорт", "фитнес", "туризм", "тренировка", "运动", "户外"] },
-  { id: "pet", label: "宠物用品", ruLabel: "Товары для животных", keywords: ["животные", "кошка", "собака", "корм", "宠物"] },
-  { id: "tools", label: "五金工具", ruLabel: "Инструменты", keywords: ["инструмент", "дрель", "ремонт", "набор инструментов", "工具"] },
-  { id: "health", label: "健康护理", ruLabel: "Здоровье", keywords: ["здоровье", "массажер", "витамины", "уход", "健康", "护理"] }
+  { id: "beauty_hair", label: "美妆个护 / 头发护理", ruLabel: "Красота / Уход за волосами", keywords: ["hair care", "шампунь", "сыворотка для волос", "маска для волос", "生发", "护发"] },
+  { id: "beauty_skin", label: "美妆个护 / 面部护理", ruLabel: "Красота / Уход за лицом", keywords: ["skin care", "крем для лица", "сыворотка для лица", "护肤", "面霜"] },
+  { id: "home_kitchen", label: "家居厨房", ruLabel: "Дом и кухня", keywords: ["kitchen organizer", "посуда", "органайзер для кухни", "家居", "厨房"] },
+  { id: "electronics", label: "数码电子", ruLabel: "Электроника", keywords: ["phone case", "смартфон", "зарядка usb", "наушники", "数码", "电子"] },
+  { id: "kids", label: "母婴儿童", ruLabel: "Детские товары", keywords: ["baby toy", "детская игрушка", "товары для детей", "母婴", "儿童"] },
+  { id: "auto", label: "汽车用品", ruLabel: "Автотовары", keywords: ["car holder", "авто держатель", "автомобильные аксессуары", "汽车", "车载"] },
+  { id: "fashion", label: "服饰配件", ruLabel: "Одежда и аксессуары", keywords: ["backpack", "сумка", "обувь", "аксессуары", "服饰", "鞋"] },
+  { id: "sports", label: "运动户外", ruLabel: "Спорт и отдых", keywords: ["fitness", "спорт", "туризм", "тренировка", "运动", "户外"] },
+  { id: "pet", label: "宠物用品", ruLabel: "Товары для животных", keywords: ["pet toy", "товары для животных", "кошка", "собака", "宠物"] },
+  { id: "tools", label: "五金工具", ruLabel: "Инструменты", keywords: ["tool kit", "дрель", "набор инструментов", "工具"] },
+  { id: "health", label: "健康护理", ruLabel: "Здоровье", keywords: ["massager", "витамины", "здоровье", "уход", "健康", "护理"] }
 ];
 
-function categoryKeyword(categoryId: string) {
+export function categoryKeyword(categoryId?: string) {
   return ozonMarketCategories.find((item) => item.id === categoryId)?.keywords[0] || "";
 }
 
-function numberOrUndefined(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function numberOrZero(value: unknown) {
-  return numberOrUndefined(value) ?? 0;
-}
-
-function stringFrom(value: unknown, fallback = "") {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
-function collectImageUrls(value: unknown, target: string[]) {
-  if (!value) return;
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (/^https?:\/\//i.test(trimmed)) target.push(trimmed);
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectImageUrls(item, target));
-    return;
-  }
-  if (typeof value === "object") {
-    Object.values(value as Record<string, unknown>).forEach((item) => collectImageUrls(item, target));
-  }
-}
-
-function imageUrlsFrom(item: Record<string, unknown>) {
-  const images: string[] = [];
-  for (const key of ["images", "image", "imageUrl", "primaryImage", "primary_image", "photo", "photos", "picture", "pictures", "thumbnail"]) {
-    collectImageUrls(item[key], images);
-  }
-  return Array.from(new Set(images));
-}
-
-function valueAtPath(value: unknown, path: string) {
-  if (!path.trim()) return undefined;
-  return path.split(".").reduce<unknown>((current, key) => {
-    if (!current || typeof current !== "object") return undefined;
-    return (current as Record<string, unknown>)[key];
-  }, value);
-}
-
-function firstArrayFromPayload(payload: unknown, configuredPath?: string) {
-  const paths = [
-    configuredPath,
-    "items",
-    "products",
-    "results",
-    "data.items",
-    "data.products",
-    "data.results",
-    "result.items",
-    "result.products",
-    "result.results"
-  ].filter(Boolean) as string[];
-
-  for (const path of paths) {
-    const value = valueAtPath(payload, path);
-    if (Array.isArray(value)) return value;
-  }
-
-  return Array.isArray(payload) ? payload : [];
-}
-
-function normalizeMarketProduct(item: unknown, index: number): OzonMarketProduct | null {
-  if (!item || typeof item !== "object") return null;
-  const record = item as Record<string, unknown>;
-  const productId = stringFrom(record.productId || record.product_id || record.id || record.sku || record.url, `market_${index + 1}`);
-  const name = stringFrom(record.name || record.title || record.productName || record.product_name);
-  if (!name) return null;
-
-  return {
-    productId,
-    name,
-    price: numberOrZero(record.price || record.salePrice || record.sale_price || record.currentPrice || record.current_price),
-    currency: stringFrom(record.currency || record.currencyCode || record.currency_code, "RUB"),
-    images: imageUrlsFrom(record),
-    sourceUrl: stringFrom(record.url || record.sourceUrl || record.source_url || record.productUrl || record.product_url) || undefined,
-    category: stringFrom(record.category || record.categoryName || record.category_name) || undefined,
-    rating: numberOrUndefined(record.rating),
-    reviewCount: numberOrUndefined(record.reviewCount || record.review_count || record.reviews),
-    salesRank: numberOrUndefined(record.salesRank || record.sales_rank || record.rank) ?? index + 1,
-    sellerName: stringFrom(record.sellerName || record.seller_name || record.seller) || undefined
+export function ozonKeyword(keyword: string) {
+  const normalized = keyword.trim().toLowerCase();
+  const aliases: Record<string, string> = {
+    backpack: "рюкзак",
+    "phone case": "чехол для телефона",
+    "pet toy": "игрушка для животных"
   };
+  return aliases[normalized] || keyword.trim();
 }
 
-function joinUrl(baseUrl: string, path: string) {
-  const cleanBase = baseUrl.replace(/\/$/, "");
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${cleanBase}${cleanPath}`;
-}
-
-async function getMarketIntegration(userId: string) {
-  const own = await prisma.apiIntegration.findUnique({
-    where: { userId_provider: { userId, provider: "ozon_market" } }
-  });
-  if (own?.secretEncrypted || readPublicConfig(own?.publicConfig).apiBaseUrl) return own;
+async function getMarketIntegration(userId?: string) {
+  if (userId) {
+    const own = await prisma.apiIntegration.findUnique({
+      where: { userId_provider: { userId, provider: "ozon_market" } }
+    });
+    if (own?.secretEncrypted || readPublicConfig(own?.publicConfig).actorId) return own;
+  }
 
   return prisma.apiIntegration.findFirst({
     where: {
@@ -164,68 +77,579 @@ async function getMarketIntegration(userId: string) {
   });
 }
 
+export async function getOzonMarketRuntimeConfig(userId?: string) {
+  const integration = await getMarketIntegration(userId);
+  const publicConfig = readPublicConfig(integration?.publicConfig);
+  const token = integration?.secretEncrypted ? decryptSecret(integration.secretEncrypted) : process.env.APIFY_TOKEN || "";
+  const actorId = publicConfig.actorId || process.env.APIFY_ACTOR_ID || DEFAULT_ACTOR_ID;
+
+  return {
+    configured: Boolean(token && actorId),
+    token,
+    actorId,
+    maxItems: Number(publicConfig.maxItems || DEFAULT_LIMIT) || DEFAULT_LIMIT,
+    sourceName: integration?.accountLabel || "Apify Ozon Market"
+  };
+}
+
+function ozonSearchUrl(keyword: string) {
+  const url = new URL("https://www.ozon.ru/search/");
+  url.searchParams.set("text", keyword);
+  return url.toString();
+}
+
+function buildActorInput(input: {
+  keyword?: string;
+  category?: string;
+  productUrl?: string;
+  limit?: number;
+}) {
+  const query = (input.keyword || input.category || "").trim();
+  const limit = input.limit || DEFAULT_LIMIT;
+  const startUrl = input.productUrl || (query ? ozonSearchUrl(query) : "https://www.ozon.ru/");
+
+  return {
+    urls: [startUrl],
+    startUrls: [{ url: startUrl }],
+    searchUrls: [startUrl],
+    searchQueries: query ? [query] : [],
+    query,
+    keyword: query,
+    maxResults: limit,
+    maxItems: limit,
+    maxProducts: limit,
+    limit,
+    proxyConfiguration: { useApifyProxy: true }
+  };
+}
+
+function actorIdForPath(actorId: string) {
+  return actorId.trim().replace("/", "~");
+}
+
+function maskToken(token: string) {
+  if (!token) return "";
+  if (token.length <= 10) return `${token.slice(0, 2)}***`;
+  return `${token.slice(0, 8)}***${token.slice(-4)}`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type ApifyRun = {
+  id?: string;
+  status?: string;
+  defaultDatasetId?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  statusMessage?: string;
+};
+
+function asRun(payload: unknown): ApifyRun {
+  if (!payload || typeof payload !== "object") return {};
+  const record = payload as Record<string, unknown>;
+  const data = record.data && typeof record.data === "object" ? record.data as Record<string, unknown> : record;
+  return {
+    id: typeof data.id === "string" ? data.id : undefined,
+    status: typeof data.status === "string" ? data.status : undefined,
+    defaultDatasetId: typeof data.defaultDatasetId === "string" ? data.defaultDatasetId : undefined,
+    startedAt: typeof data.startedAt === "string" ? data.startedAt : undefined,
+    finishedAt: typeof data.finishedAt === "string" ? data.finishedAt : undefined,
+    statusMessage: typeof data.statusMessage === "string" ? data.statusMessage : undefined
+  };
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  try {
+    return {
+      text,
+      json: text ? JSON.parse(text) as unknown : null
+    };
+  } catch {
+    return {
+      text,
+      json: null
+    };
+  }
+}
+
+async function fetchApifyJson(url: string, token: string, init?: RequestInit) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      accept: "application/json",
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+      authorization: `Bearer ${token}`,
+      ...(init?.headers || {})
+    },
+    cache: "no-store"
+  });
+  const body = await readJsonResponse(response);
+  return { response, ...body };
+}
+
+async function startApifyActor(input: {
+  token: string;
+  actorId: string;
+  body: Record<string, unknown>;
+}) {
+  const requestUrl = `${APIFY_BASE_URL}/acts/${encodeURIComponent(actorIdForPath(input.actorId))}/runs`;
+  return fetchApifyJson(requestUrl, input.token, {
+    method: "POST",
+    body: JSON.stringify(input.body)
+  });
+}
+
+async function getApifyRun(input: { token: string; runId: string }) {
+  return fetchApifyJson(`${APIFY_BASE_URL}/actor-runs/${encodeURIComponent(input.runId)}`, input.token);
+}
+
+async function abortApifyRun(input: { token: string; runId: string }) {
+  return fetchApifyJson(`${APIFY_BASE_URL}/actor-runs/${encodeURIComponent(input.runId)}/abort`, input.token, { method: "POST" });
+}
+
+async function getApifyDatasetItems(input: { token: string; datasetId: string }) {
+  const url = new URL(`${APIFY_BASE_URL}/datasets/${encodeURIComponent(input.datasetId)}/items`);
+  url.searchParams.set("clean", "true");
+  url.searchParams.set("format", "json");
+  return fetchApifyJson(url.toString(), input.token);
+}
+
+async function runApifyActorWithPolling(input: {
+  userId?: string;
+  keyword?: string;
+  category?: string;
+  productUrl?: string;
+  limit?: number;
+  timeoutMs?: number;
+  abortOnTimeout?: boolean;
+  debug?: boolean;
+}) {
+  const config = await getOzonMarketRuntimeConfig(input.userId);
+  const logs: Array<Record<string, unknown>> = [];
+  const timing = { t0: Date.now(), tActorStart: 0, tFirstPoll: 0, tLastPoll: 0, pollCount: 0, tDataset: 0, tAbort: 0 };
+  if (!config.configured) {
+    return {
+      items: [] as unknown[],
+      logs: [{ step: "config", status: "UNCONFIGURED", message: "APIFY_TOKEN 或 APIFY_ACTOR_ID 未配置。" }]
+    };
+  }
+
+  const body = buildActorInput(input);
+  const requestUrl = `${APIFY_BASE_URL}/acts/${encodeURIComponent(actorIdForPath(config.actorId))}/runs`;
+  logs.push({
+    step: "request",
+    method: "POST",
+    url: requestUrl,
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      authorization: `Bearer ${maskToken(config.token)}`
+    },
+    body
+  });
+
+  const startResult = await startApifyActor({ token: config.token, actorId: config.actorId, body });
+  timing.tActorStart = Date.now();
+  logs.push({
+    step: "actor-start",
+    statusCode: startResult.response.status,
+    ok: startResult.response.ok,
+    raw: startResult.json ?? startResult.text
+  });
+
+  if (!startResult.response.ok) {
+    console.info("[apify_timing]", JSON.stringify({
+      keyword: input.keyword || input.category || "",
+      status: "ACTOR_START_FAILED",
+      httpStatus: startResult.response.status,
+      itemCount: 0,
+      actorStartMs: timing.tActorStart - timing.t0,
+      firstPollLatencyMs: 0,
+      pollingMs: 0,
+      pollCount: 0,
+      datasetMs: 0,
+      abortMs: 0,
+      totalMs: Date.now() - timing.t0
+    }));
+    throw new Error(startResult.text.slice(0, 800) || `Apify start HTTP ${startResult.response.status}`);
+  }
+
+  let run = asRun(startResult.json);
+  logs.push({
+    step: "actor-started",
+    message: "Actor启动成功",
+    runId: run.id,
+    datasetId: run.defaultDatasetId,
+    status: run.status || "UNKNOWN"
+  });
+
+  if (!run.id) {
+    throw new Error("Apify 已响应，但没有返回 Run ID。");
+  }
+  const runId = run.id;
+
+  const timeoutMs = input.timeoutMs ?? 90_000;
+  const deadline = Date.now() + timeoutMs;
+  while (!FINAL_RUN_STATUSES.has(run.status || "") && Date.now() < deadline) {
+    await sleep(2_000);
+    const pollResult = await getApifyRun({ token: config.token, runId });
+    timing.pollCount += 1;
+    timing.tLastPoll = Date.now();
+    if (!timing.tFirstPoll) timing.tFirstPoll = timing.tLastPoll;
+    logs.push({
+      step: "polling",
+      statusCode: pollResult.response.status,
+      ok: pollResult.response.ok,
+      raw: pollResult.json ?? pollResult.text
+    });
+    if (!pollResult.response.ok) {
+      throw new Error(pollResult.text.slice(0, 800) || `Apify poll HTTP ${pollResult.response.status}`);
+    }
+    run = asRun(pollResult.json);
+    logs.push({
+      step: "run-status",
+      runId: run.id,
+      datasetId: run.defaultDatasetId,
+      status: run.status || "UNKNOWN",
+      statusMessage: run.statusMessage
+    });
+  }
+
+  if (!FINAL_RUN_STATUSES.has(run.status || "")) {
+    let partialItems: unknown[] = [];
+    if (run.defaultDatasetId) {
+      const partialDatasetResult = await getApifyDatasetItems({ token: config.token, datasetId: run.defaultDatasetId });
+      logs.push({
+        step: "dataset-items-partial-before-abort",
+        statusCode: partialDatasetResult.response.status,
+        ok: partialDatasetResult.response.ok,
+        datasetId: run.defaultDatasetId,
+        raw: partialDatasetResult.json ?? partialDatasetResult.text
+      });
+      partialItems = Array.isArray(partialDatasetResult.json) ? partialDatasetResult.json : [];
+      timing.tDataset = Date.now();
+    }
+    logs.push({
+      step: "timeout",
+      status: run.status || "UNKNOWN",
+      runId,
+      datasetId: run.defaultDatasetId,
+      message: `${timeoutMs}ms 内未完成，终止本次等待。`
+    });
+    if (input.abortOnTimeout) {
+      const abortResult = await abortApifyRun({ token: config.token, runId });
+      timing.tAbort = Date.now();
+      logs.push({
+        step: "abort",
+        statusCode: abortResult.response.status,
+        ok: abortResult.response.ok,
+        raw: abortResult.json ?? abortResult.text
+      });
+    }
+    console.info("[apify_timing]", JSON.stringify({
+      keyword: input.keyword || input.category || "",
+      status: run.status || "TIMEOUT",
+      itemCount: partialItems.length,
+      actorStartMs: timing.tActorStart - timing.t0,
+      firstPollLatencyMs: timing.tFirstPoll ? timing.tFirstPoll - timing.tActorStart : 0,
+      pollingMs: timing.tFirstPoll ? timing.tLastPoll - timing.tFirstPoll : 0,
+      pollCount: timing.pollCount,
+      datasetMs: timing.tDataset ? timing.tDataset - timing.tLastPoll : 0,
+      abortMs: timing.tAbort ? timing.tAbort - timing.tDataset : 0,
+      totalMs: Date.now() - timing.t0
+    }));
+    return { items: partialItems, logs, run };
+  }
+
+  if (run.status !== "SUCCEEDED") {
+    console.info("[apify_timing]", JSON.stringify({
+      keyword: input.keyword || input.category || "",
+      status: run.status || "FAILED",
+      itemCount: 0,
+      actorStartMs: timing.tActorStart - timing.t0,
+      firstPollLatencyMs: timing.tFirstPoll ? timing.tFirstPoll - timing.tActorStart : 0,
+      pollingMs: timing.tFirstPoll ? timing.tLastPoll - timing.tFirstPoll : 0,
+      pollCount: timing.pollCount,
+      datasetMs: 0,
+      abortMs: 0,
+      totalMs: Date.now() - timing.t0
+    }));
+    return { items: [] as unknown[], logs, run };
+  }
+
+  const datasetId = run.defaultDatasetId;
+  if (!datasetId) {
+    logs.push({ step: "dataset", status: "MISSING", message: "Run 成功但没有 defaultDatasetId。" });
+    console.info("[apify_timing]", JSON.stringify({
+      keyword: input.keyword || input.category || "",
+      status: "SUCCEEDED_NO_DATASET",
+      itemCount: 0,
+      actorStartMs: timing.tActorStart - timing.t0,
+      pollingMs: timing.tFirstPoll ? timing.tLastPoll - timing.tFirstPoll : 0,
+      pollCount: timing.pollCount,
+      totalMs: Date.now() - timing.t0
+    }));
+    return { items: [] as unknown[], logs, run };
+  }
+
+  const datasetResult = await getApifyDatasetItems({ token: config.token, datasetId });
+  timing.tDataset = Date.now();
+  logs.push({
+    step: "dataset-items",
+    statusCode: datasetResult.response.status,
+    ok: datasetResult.response.ok,
+    datasetId,
+    raw: datasetResult.json ?? datasetResult.text
+  });
+
+  if (!datasetResult.response.ok) {
+    throw new Error(datasetResult.text.slice(0, 800) || `Apify dataset HTTP ${datasetResult.response.status}`);
+  }
+
+  const finalItems = Array.isArray(datasetResult.json) ? datasetResult.json : [];
+  console.info("[apify_timing]", JSON.stringify({
+    keyword: input.keyword || input.category || "",
+    status: run.status || "SUCCEEDED",
+    itemCount: finalItems.length,
+    actorStartMs: timing.tActorStart - timing.t0,
+    firstPollLatencyMs: timing.tFirstPoll ? timing.tFirstPoll - timing.tActorStart : 0,
+    pollingMs: timing.tFirstPoll ? timing.tLastPoll - timing.tFirstPoll : 0,
+    pollCount: timing.pollCount,
+    datasetMs: timing.tDataset ? timing.tDataset - timing.tLastPoll : 0,
+    abortMs: 0,
+    totalMs: Date.now() - timing.t0
+  }));
+  return {
+    items: finalItems,
+    logs,
+    run
+  };
+}
+
+async function runApifyActor(input: {
+  userId?: string;
+  keyword?: string;
+  category?: string;
+  productUrl?: string;
+  limit?: number;
+}) {
+  const result = await runApifyActorWithPolling({ ...input, timeoutMs: 30_000, abortOnTimeout: true });
+  return result.items;
+}
+
+function normalizeItems(items: unknown[], limit = DEFAULT_LIMIT) {
+  return items
+    .map(normalizeApifyOzonProduct)
+    .filter((item): item is OzonMarketProduct => Boolean(item))
+    .sort((a, b) => {
+      const score = (item: OzonMarketProduct) =>
+        (item.price !== undefined ? 10 : 0) +
+        ((item.images?.length || item.imageUrl) ? 5 : 0) +
+        (item.rating !== undefined ? 2 : 0);
+      return score(b) - score(a);
+    })
+    .slice(0, limit);
+}
+
+export async function searchProducts(input: {
+  userId?: string;
+  keyword: string;
+  limit?: number;
+}): Promise<OzonMarketProduct[]> {
+  const keyword = ozonKeyword(input.keyword);
+  if (!keyword) return [];
+  const items = await runApifyActor({ userId: input.userId, keyword, limit: input.limit || DEFAULT_LIMIT });
+  return normalizeItems(items, input.limit || DEFAULT_LIMIT);
+}
+
+export async function searchCategory(input: {
+  userId?: string;
+  categoryId?: string;
+  keyword?: string;
+  limit?: number;
+}): Promise<OzonMarketProduct[]> {
+  const keyword = input.keyword?.trim() ? ozonKeyword(input.keyword) : categoryKeyword(input.categoryId);
+  if (!keyword) return [];
+  const items = await runApifyActor({ userId: input.userId, category: keyword, limit: input.limit || DEFAULT_LIMIT });
+  return normalizeItems(items, input.limit || DEFAULT_LIMIT);
+}
+
+export async function getProductDetails(input: {
+  userId?: string;
+  productUrl?: string;
+  externalId?: string;
+}): Promise<OzonMarketProduct | null> {
+  const productUrl = input.productUrl?.trim();
+  if (!productUrl && !input.externalId) return null;
+  const items = await runApifyActor({
+    userId: input.userId,
+    productUrl: productUrl || `https://www.ozon.ru/product/${input.externalId}/`,
+    limit: 1
+  });
+  return normalizeItems(items, 1)[0] || null;
+}
+
+export async function testOzonMarketConnection(userId: string) {
+  const startedAt = Date.now();
+  const result = await runApifyActorWithPolling({
+    userId,
+    keyword: "backpack",
+    limit: 20,
+    timeoutMs: 30_000,
+    abortOnTimeout: true,
+    debug: true
+  });
+  const products = normalizeItems(result.items, 20);
+  return {
+    ok: products.length > 0,
+    count: products.length,
+    responseMs: Date.now() - startedAt,
+    status: result.run?.status || "UNKNOWN",
+    runId: result.run?.id,
+    datasetId: result.run?.defaultDatasetId,
+    logs: result.logs,
+    products
+  };
+}
+
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 export async function searchOzonMarketProducts(input: {
   userId: string;
   keyword?: string;
   categoryId?: string;
   limit?: number;
 }): Promise<OzonMarketSearchResult> {
-  const integration = await getMarketIntegration(input.userId);
-  const publicConfig = readPublicConfig(integration?.publicConfig);
-  const apiBaseUrl = publicConfig.apiBaseUrl?.trim();
-  const searchPath = publicConfig.searchPath?.trim() || "/search";
-  const sourceName = integration?.accountLabel || "Ozon 市场数据源";
-
-  if (!apiBaseUrl) {
+  const t0 = Date.now();
+  const config = await getOzonMarketRuntimeConfig(input.userId);
+  if (!config.configured) {
     return {
       mode: "unconfigured",
-      sourceName,
-      message: "尚未接入 Ozon 全站市场数据源。当前不能真实搜索全 Ozon，也不能生成热销 Top10-20。",
+      sourceName: config.sourceName,
+      message: "尚未接入 Apify Ozon Market。当前不会展示假商品；请在 API 接入中心保存 Apify Token 和 Actor ID。",
       products: []
     };
   }
 
-  try {
-    const keyword = input.keyword?.trim() || categoryKeyword(input.categoryId || "");
-    const url = new URL(joinUrl(apiBaseUrl, searchPath));
-    url.searchParams.set(publicConfig.queryParam || "q", keyword);
-    if (input.categoryId) url.searchParams.set(publicConfig.categoryParam || "category", input.categoryId);
-    url.searchParams.set(publicConfig.limitParam || "limit", String(input.limit || DEFAULT_LIMIT));
+  const limit = input.limit || DEFAULT_LIMIT;
+  const rawKeyword = input.keyword?.trim() || "";
+  const searchKeyword = rawKeyword || categoryKeyword(input.categoryId) || "";
+  const normalizedKeyword = ozonKeyword(searchKeyword);
+  const category = input.categoryId || "";
 
-    const headers: Record<string, string> = { Accept: "application/json" };
-    const secret = integration?.secretEncrypted ? decryptSecret(integration.secretEncrypted) : "";
-    if (secret) {
-      const headerName = publicConfig.authHeader || "Authorization";
-      const scheme = publicConfig.authScheme || "Bearer";
-      headers[headerName] = scheme ? `${scheme} ${secret}` : secret;
-    }
+  if (!normalizedKeyword) {
+    return {
+      mode: "configured",
+      sourceName: config.sourceName,
+      message: "请输入关键词或选择类目。",
+      products: []
+    };
+  }
 
-    const response = await fetch(url, { headers, cache: "no-store" });
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) as Prisma.JsonValue : [];
+  // ── P0-1: 前置查缓存 ──
+  const cacheLookupStart = Date.now();
+  const cached = await prisma.marketSearchCache.findUnique({
+    where: { keyword_category: { keyword: normalizedKeyword, category } }
+  });
+  const cacheLookupMs = Date.now() - cacheLookupStart;
 
-    if (!response.ok) {
-      throw new Error(text.slice(0, 220) || `HTTP ${response.status}`);
-    }
-
-    const items = firstArrayFromPayload(payload, publicConfig.resultPath)
-      .map(normalizeMarketProduct)
-      .filter((item): item is OzonMarketProduct => Boolean(item))
-      .slice(0, input.limit || DEFAULT_LIMIT);
+  if (cached && cached.expiresAt > new Date()) {
+    const hitWriteStart = Date.now();
+    await prisma.marketSearchCache.update({
+      where: { id: cached.id },
+      data: { hitCount: { increment: 1 }, updatedAt: new Date() }
+    });
+    const hitWriteMs = Date.now() - hitWriteStart;
+    const products = cached.result as unknown as OzonMarketProduct[];
+    const totalMs = Date.now() - t0;
+    const cacheAgeS = Math.round((Date.now() - cached.createdAt.getTime()) / 1000);
+    console.info("[cache_hit]", JSON.stringify({
+      keyword: normalizedKeyword,
+      category,
+      productCount: products.length,
+      cacheLookupMs,
+      hitWriteMs,
+      totalMs,
+      hitCount: cached.hitCount + 1,
+      cacheAgeS
+    }));
 
     return {
       mode: "configured",
-      sourceName,
-      message: items.length
-        ? `已从真实市场数据源读取 ${items.length} 个 Ozon 商品。`
-        : "市场数据源已连接，但当前关键词/类目没有返回商品。",
-      products: items
+      sourceName: config.sourceName,
+      message: `已从缓存读取 ${products.length} 个 Ozon 市场商品（24h 内已抓取，累计命中 ${cached.hitCount + 1} 次，缓存年龄 ${cacheAgeS}s）。`,
+      products: products.map(toOzonMarketUiProduct)
+    };
+  }
+
+  // ── 未命中：调 Apify ──
+  try {
+    const apifyStart = Date.now();
+    const products = rawKeyword
+      ? await searchProducts({ userId: input.userId, keyword: rawKeyword, limit })
+      : await searchCategory({ userId: input.userId, categoryId: input.categoryId || undefined, limit });
+    const apifyMs = Date.now() - apifyStart;
+
+    // 写缓存（upsert：已过期记录直接覆盖，hitCount 重置）
+    const cacheWriteStart = Date.now();
+    const expiresAt = new Date(Date.now() + CACHE_TTL_MS);
+    await prisma.marketSearchCache.upsert({
+      where: { keyword_category: { keyword: normalizedKeyword, category } },
+      create: {
+        keyword: normalizedKeyword,
+        category,
+        result: products as unknown as object,
+        productCount: products.length,
+        source: "apify",
+        expiresAt
+      },
+      update: {
+        result: products as unknown as object,
+        productCount: products.length,
+        source: "apify",
+        expiresAt,
+        hitCount: 0
+      }
+    });
+    const cacheWriteMs = Date.now() - cacheWriteStart;
+    const totalMs = Date.now() - t0;
+
+    const first = products[0];
+    console.info("[cache_miss_apify]", JSON.stringify({
+      keyword: normalizedKeyword,
+      category,
+      count: products.length,
+      cacheLookupMs,
+      apifyMs,
+      cacheWriteMs,
+      totalMs,
+      firstTitle: first?.title || "",
+      firstPrice: first?.price ?? null
+    }));
+
+    return {
+      mode: "configured",
+      sourceName: config.sourceName,
+      message: products.length
+        ? `已通过 Apify 读取 ${products.length} 个真实 Ozon 市场商品。`
+        : "Apify 已连接，但当前关键词/类目没有返回商品。",
+      products: products.map(toOzonMarketUiProduct)
     };
   } catch (error) {
+    const totalMs = Date.now() - t0;
+    console.info("[cache_miss_error]", JSON.stringify({
+      keyword: normalizedKeyword,
+      category,
+      totalMs,
+      error: error instanceof Error ? error.message : String(error)
+    }));
     return {
       mode: "error",
-      sourceName,
-      message: error instanceof Error ? `Ozon 市场数据源请求失败：${error.message}` : "Ozon 市场数据源请求失败。",
+      sourceName: config.sourceName,
+      message: error instanceof Error ? `Apify Ozon Market 请求失败：${error.message}` : "Apify Ozon Market 请求失败。",
       products: []
     };
   }

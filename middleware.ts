@@ -4,10 +4,14 @@ const sessionCookie = "ozon_ops_session";
 
 const protectedPrefixes = [
   "/admin",
+  "/ai-studio",
   "/collector",
+  "/content",
   "/credits",
   "/customer",
   "/dashboard",
+  "/integrations",
+  "/membership",
   "/products",
   "/research",
   "/social",

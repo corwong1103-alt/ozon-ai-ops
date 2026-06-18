@@ -1,6 +1,6 @@
 import { KeyRound, Link2, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { DashscopeTestForm, IntegrationConfigForm } from "@/components/IntegrationFeedbackForms";
+import { DashscopeTestForm, IntegrationConfigForm, OzonMarketTestForm } from "@/components/IntegrationFeedbackForms";
 import { requireAdminUser } from "@/lib/auth";
 import { integrationDefinitions, readPublicConfig } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -80,6 +80,7 @@ export default async function IntegrationsPage() {
               />
 
               {definition.provider === "dashscope" && <DashscopeTestForm />}
+              {definition.provider === "ozon_market" && <OzonMarketTestForm />}
 
               <div className="integration-foot">
                 <span>
