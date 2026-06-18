@@ -367,3 +367,34 @@ model ResearchTask {
   @@index([keyword])
   @@index([keyword, category, status])
 }
+
+/// 跨平台采集源商品（Ozon / 1688 / Wildberries 等）。导入前的中立存储层。
+/// 与 Product（内部商品池）解耦：搜索结果先落 SourceProduct，用户确认后才转成 Product。
+/// 唯一约束 source + sourceProductId，防止同一源商品重复导入。
+model SourceProduct {
+  id                 String    @id @default(cuid())
+  source             String    // "1688" / "ozon_market" / "ozon" / "wildberries"
+  sourceProductId    String    // 源平台商品 ID（1688 offer id / Ozon sku）
+  title              String
+  image              String?
+  images             Json      @default("[]")
+  price              Decimal?  @db.Decimal(12, 2)
+  currency           String    @default("CNY")
+  supplier           String?
+  supplierLevel      String?
+  sales              Int       @default(0)
+  rating             Decimal?  @db.Decimal(4, 2)
+  productUrl         String?
+  researchKeyword    String?
+  importedBy         String?   // 已转成内部 Product 的用户 ID（null = 未导入）
+  importedProductId  String?   // 对应内部 Product.id（null = 未导入）
+  rawData            Json      @default("{}")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([source, sourceProductId])
+  @@index([source])
+  @@index([sourceProductId])
+  @@index([importedBy])
+  @@index([researchKeyword])
+}

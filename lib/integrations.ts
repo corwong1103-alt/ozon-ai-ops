@@ -176,8 +176,17 @@ export async function getDashscopeRuntimeConfig(userId?: string) {
         where: { userId_provider: { userId, provider: "dashscope" } }
       })
     : null;
-  const publicConfig = readPublicConfig(integration?.publicConfig);
-  const apiKey = integration?.secretEncrypted ? decryptSecret(integration.secretEncrypted) : process.env.DASHSCOPE_API_KEY || process.env.AI_API_KEY || "";
+  const adminIntegration = integration?.secretEncrypted
+    ? null
+    : await prisma.apiIntegration.findFirst({
+        where: { provider: "dashscope", user: { role: "admin" } },
+        orderBy: { updatedAt: "desc" }
+      });
+  const effectiveIntegration = integration?.secretEncrypted ? integration : adminIntegration;
+  const publicConfig = readPublicConfig(effectiveIntegration?.publicConfig);
+  const apiKey = effectiveIntegration?.secretEncrypted
+    ? decryptSecret(effectiveIntegration.secretEncrypted)
+    : process.env.DASHSCOPE_API_KEY || process.env.AI_API_KEY || "";
 
   return {
     enabled: Boolean(apiKey) || process.env.AI_PROVIDER === "dashscope",

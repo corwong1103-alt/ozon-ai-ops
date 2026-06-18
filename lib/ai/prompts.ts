@@ -78,3 +78,95 @@ export function buildProductVideoPrompt(product: ProductInput) {
     `描述：${product.description}`
   ].join("\n");
 }
+
+export type OzonListingInput = {
+  title: string;
+  description: string;
+  price?: string | number;
+  supplier?: string;
+  sourceImages?: string[];
+  extraContext?: string;
+};
+
+/**
+ * 基于 1688 源商品生成完整 Ozon 上架资料：
+ * 俄文标题、俄文描述、商品属性键值对、SEO 关键词。
+ * 输出严格 JSON，供 1688 导入后一键生成 Listing。
+ */
+export function buildOzonListingPrompt(input: OzonListingInput) {
+  return [
+    "你是 Ozon 俄罗斯跨境电商上架运营专家。",
+    "请基于中国 1688 源商品信息，生成一份可直接用于 Ozon 上架的俄语商品资料。",
+    "要求：",
+    "- 标题俄语自然、含核心卖点关键词，不超过 200 字符",
+    "- 描述俄语详细、结构化（卖点、规格、适用场景），不夸大功效",
+    "- 属性：提取 3-8 个商品属性键值对（俄语 key + value），如材质、尺寸、颜色、容量等",
+    "- seoKeywords：5-10 个俄语 SEO 关键词，用于 Ozon 搜索优化",
+    "严格输出 JSON，字段：titleRu、descriptionRu、attributes（数组，每项 {key, value}）、seoKeywords（字符串数组）。",
+    "不要输出 JSON 以外的内容，不要用 markdown 代码块包裹。",
+    "",
+    `源商品标题：${input.title}`,
+    input.description ? `源商品描述：${input.description}` : "",
+    input.price ? `源商品价格（人民币）：${input.price}` : "",
+    input.supplier ? `供应商：${input.supplier}` : "",
+    input.extraContext ? `补充说明：${input.extraContext}` : ""
+  ].filter(Boolean).join("\n");
+}
+
+export type OzonListing = {
+  titleRu: string;
+  descriptionRu: string;
+  attributes: Array<{ key: string; value: string }>;
+  seoKeywords: string[];
+};
+
+/**
+ * 容错解析 AI 返回的 Listing JSON。
+ * 模型可能输出 markdown 代码块或多余文本，这里只提取首个 JSON 对象。
+ */
+export function parseOzonListing(raw: string): OzonListing {
+  const fallback: OzonListing = { titleRu: "", descriptionRu: "", attributes: [], seoKeywords: [] };
+  if (!raw) return fallback;
+
+  // 去掉 ```json ... ``` 包裹
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  // 尝试直接解析
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    // 提取第一个 { ... } 块
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object") return fallback;
+  const obj = parsed as Record<string, unknown>;
+
+  const titleRu = typeof obj.titleRu === "string" ? obj.titleRu.trim() : "";
+  const descriptionRu = typeof obj.descriptionRu === "string" ? obj.descriptionRu.trim() : "";
+  const attributes = Array.isArray(obj.attributes)
+    ? obj.attributes
+        .filter((item) => item && typeof item === "object")
+        .map((item) => {
+          const record = item as Record<string, unknown>;
+          return {
+            key: String(record.key || "").trim(),
+            value: String(record.value || "").trim()
+          };
+        })
+        .filter((item) => item.key || item.value)
+    : [];
+  const seoKeywords = Array.isArray(obj.seoKeywords)
+    ? obj.seoKeywords.filter((item) => typeof item === "string").map((item) => String(item).trim()).filter(Boolean)
+    : [];
+
+  return { titleRu, descriptionRu, attributes, seoKeywords };
+}

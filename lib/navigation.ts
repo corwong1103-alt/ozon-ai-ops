@@ -7,6 +7,7 @@ import {
   Gauge,
   KeyRound,
   Megaphone,
+  PackageSearch,
   Search,
   Settings,
   Store,
@@ -19,10 +20,11 @@ export type NavItem = {
   icon: typeof Gauge;
 };
 
-// V3 Seller 后台菜单（7 项）
+// V3 Seller 后台菜单（含 1688 采集入口）
 export const sellerNavItems: NavItem[] = [
   { href: "/dashboard", label: "首页", icon: Gauge },
   { href: "/research/ozon", label: "市场研究", icon: Search },
+  { href: "/dashboard/sources/1688", label: "1688 采集", icon: PackageSearch },
   { href: "/products", label: "商品中心", icon: Boxes },
   { href: "/content", label: "内容中心", icon: Megaphone },
   { href: "/stores", label: "店铺中心", icon: Store },
