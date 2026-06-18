@@ -18,6 +18,7 @@ type MediaInput = {
   prompt: string;
   model?: string;
   userId?: string;
+  referenceImage?: string;
 };
 
 type AiProvider = "mock" | "dashscope";
@@ -141,13 +142,19 @@ export async function generateImage(input: MediaInput) {
     };
   }
 
+  const content: Record<string, string>[] = [];
+  if (input.referenceImage) {
+    content.push({ image: input.referenceImage });
+  }
+  content.push({ text: input.prompt });
+
   const data = await dashscopeNativeFetch(config, "/api/v1/services/aigc/multimodal-generation/generation", {
     model: input.model || config.imageModel,
     input: {
       messages: [
         {
           role: "user",
-          content: [{ text: input.prompt }]
+          content
         }
       ]
     },

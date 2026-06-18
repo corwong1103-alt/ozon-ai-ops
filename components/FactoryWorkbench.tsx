@@ -240,31 +240,31 @@ export function FactoryWorkbench({ product }: { product: Product }) {
             <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><ImageIcon size={15} className="text-accent" />AI 图片处理</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_optimize", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n优化这张电商产品图，保持原商品不变，优化背景和光线：${title}` });
+                const data = await callAi("img_optimize", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n优化这张电商产品图，保持原商品不变，优化背景和光线：${title}`, referenceImage: referenceImage || undefined });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_optimize"}>
                 <ImageIcon size={13} /> 原图优化
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_bg", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n替换这张产品图的背景为纯白色电商背景，保持产品清晰：${title}` });
+                const data = await callAi("img_bg", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n替换这张产品图的背景为纯白色电商背景，保持产品清晰：${title}`, referenceImage: referenceImage || undefined });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_bg"}>
                 <ImageIcon size={13} /> 背景替换
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_model", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张俄罗斯模特展示${title}的电商图，自然光线，专业摄影` });
+                const data = await callAi("img_model", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张俄罗斯模特展示${title}的电商图，自然光线，专业摄影`, referenceImage: referenceImage || undefined });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_model"}>
                 <ImageIcon size={13} /> AI 模特图
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_scene", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张${title}的场景使用图，居家环境，柔和光线` });
+                const data = await callAi("img_scene", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张${title}的场景使用图，居家环境，柔和光线`, referenceImage: referenceImage || undefined });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_scene"}>
                 <ImageIcon size={13} /> AI 场景图
               </button>
               <button className="btn-secondary text-xs sm:col-span-2" onClick={async () => {
-                const data = await callAi("img_main", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n重新生成一张 Ozon 电商主图：${title}` });
+                const data = await callAi("img_main", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n重新生成一张 Ozon 电商主图：${title}`, referenceImage: referenceImage || undefined });
                 if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
               }} disabled={loading === "img_main"}>
                 <ImageIcon size={13} /> 重新生成主图
@@ -286,6 +286,14 @@ export function FactoryWorkbench({ product }: { product: Product }) {
                     router.refresh();
                   } catch { toast("error", "添加失败"); }
                 }}>添加到商品</button>
+              </div>
+            )}
+
+            {loading && loading.startsWith("img_") && (
+              <div className="mt-4 flex flex-col items-center justify-center rounded-lg border border-accent/20 bg-accent/5 p-6">
+                <div className="mb-3 h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                <p className="text-sm font-medium text-earth">AI 正在生成图片...</p>
+                <p className="mt-1 text-xs text-steel/60">预计 10~20s，请稍候</p>
               </div>
             )}
           </div>
@@ -319,14 +327,37 @@ export function FactoryWorkbench({ product }: { product: Product }) {
               }} disabled={loading === "infer"}>
                 <Wand2 size={13} /> 生成 Prompt
               </button>
-              {inferredPrompt && (
+              {loading === "infer" && (
+                <div className="flex flex-col items-center justify-center rounded-lg border border-accent/20 bg-accent/5 p-6">
+                  <div className="mb-3 h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                  <p className="text-sm font-medium text-earth">AI 正在分析图片...</p>
+                  <p className="mt-1 text-xs text-steel/60">预计 5~10s，正在生成反推 Prompt</p>
+                </div>
+              )}
+
+              {loading === "infer_image" && (
+                <div className="flex flex-col items-center justify-center rounded-lg border border-accent/20 bg-accent/5 p-6">
+                  <div className="mb-3 h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                  <p className="text-sm font-medium text-earth">AI 正在根据 Prompt 生成图片...</p>
+                  <p className="mt-1 text-xs text-steel/60">预计 10~20s，完成后自动显示</p>
+                </div>
+              )}
+
+              {inferredPrompt && loading !== "infer" && (
                 <div className="rounded-lg border border-accent/20 bg-accent/5 p-4">
                   <p className="text-[10px] font-bold uppercase text-steel mb-1">生成的 Prompt</p>
                   <p className="text-xs text-earth whitespace-pre-wrap">{inferredPrompt}</p>
                   <button className="btn-primary text-xs mt-3" onClick={async () => {
-                    const data = await callAi("infer_image", { mode: "image", prompt: inferredPrompt });
-                    if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
+                    const data = await callAi("infer_image", { mode: "image", prompt: inferredPrompt, referenceImage: referenceImage || undefined });
+                    if (data?.imageUrl) { setGeneratedImageUrl(data.imageUrl); setActivePanel("image"); }
                   }}>用此 Prompt 生图</button>
+                </div>
+              )}
+
+              {generatedImageUrl && loading !== "infer_image" && (
+                <div className="rounded-lg border border-accent/20 bg-accent/5 p-4">
+                  <p className="text-[10px] font-bold uppercase text-steel mb-2">AI 生成图</p>
+                  <img src={generatedImageUrl} alt="AI generated" className="w-full rounded-lg max-h-80 object-contain" />
                 </div>
               )}
             </div>

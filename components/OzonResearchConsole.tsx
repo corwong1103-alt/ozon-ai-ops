@@ -1,8 +1,12 @@
+"use client";
+
+import { useState, useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { OzonMarketPoolButton, OzonPoolButton } from "@/components/OzonPoolButton";
 import { ReliableProductImage } from "@/components/ReliableProductImage";
 import { ResearchTaskPoller } from "@/components/ResearchTaskPoller";
-import { ozonMarketCategories, type OzonMarketSearchResult } from "@/lib/services/ozon-market";
+import { ozonMarketCategories } from "@/lib/services/ozon-market-categories";
+import type { OzonMarketSearchResult } from "@/lib/services/ozon-market";
 import type { KeywordExpansionResult } from "@/lib/services/keyword-expander";
 import type { ScoredProduct } from "@/lib/services/product-scoring";
 import type { OzonProductImport } from "@/lib/services/ozon";
@@ -112,6 +116,38 @@ export function OzonResearchConsole({
   const selectedStore = stores.find((store) => store.id === selectedStoreId);
   const imageReadyCount = products.filter((product) => product.images.length > 0).length;
   const marketImageReadyCount = marketProducts.filter((product) => product.images.length > 0).length;
+
+  // Client-side filter controls for market section
+  const [marketSort, setMarketSort] = useState("default");
+  const [marketMinPriceStr, setMarketMinPriceStr] = useState("");
+  const [marketMaxPriceStr, setMarketMaxPriceStr] = useState("");
+
+  const filteredMarketProducts = useMemo(() => {
+    const items = scoredProducts?.length ? scoredProducts : marketProducts;
+    const minP = marketMinPriceStr ? Number(marketMinPriceStr) : undefined;
+    const maxP = marketMaxPriceStr ? Number(marketMaxPriceStr) : undefined;
+    return [...items]
+      .filter((p) => {
+        const price = p.price;
+        if (price === undefined) return !minP && !maxP;
+        if (minP !== undefined && price < minP) return false;
+        if (maxP !== undefined && price > maxP) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (marketSort === "price") {
+          const aP = a.price ?? Infinity;
+          const bP = b.price ?? Infinity;
+          return aP - bP;
+        }
+        if (marketSort === "rating") {
+          const aR = a.rating ?? 0;
+          const bR = b.rating ?? 0;
+          return bR - aR;
+        }
+        return (a.salesRank ?? 0) - (b.salesRank ?? 0);
+      });
+  }, [marketSort, marketMinPriceStr, marketMaxPriceStr, marketProducts, scoredProducts]);
 
   return (
     <AppShell title="Ozon 调研" eyebrow="真实商品图" user={user}>
@@ -239,8 +275,31 @@ export function OzonResearchConsole({
                 </div>
               )}
 
+              {marketProducts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-steel">排序</span>
+                    <select className="field text-xs py-1" value={marketSort} onChange={(e) => setMarketSort(e.target.value)}>
+                      <option value="default">默认</option>
+                      <option value="price">价格升序</option>
+                      <option value="rating">评分降序</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-steel">最低价</span>
+                    <input className="field w-24 text-xs py-1" placeholder="RUB" value={marketMinPriceStr} onChange={(e) => setMarketMinPriceStr(e.target.value)} />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-steel">最高价</span>
+                    <input className="field w-24 text-xs py-1" placeholder="RUB" value={marketMaxPriceStr} onChange={(e) => setMarketMaxPriceStr(e.target.value)} />
+                  </div>
+                  <span className="text-[11px] text-steel/60">{filteredMarketProducts.length} 件</span>
+                </div>
+              )}
+
+              {filteredMarketProducts.length > 0 && (
               <div className="research-product-grid">
-                {(scoredProducts?.length ? scoredProducts : marketProducts).map((product) => {
+                {filteredMarketProducts.map((product) => {
                   const scores = "scores" in product ? (product as ScoredProduct).scores : null;
                   return (
                   <article key={`${product.productId}_${product.sourceUrl || product.name}`} className="research-product-card">
@@ -297,6 +356,14 @@ export function OzonResearchConsole({
                   );
                 })}
               </div>
+              )}
+
+              {marketProducts.length > 0 && filteredMarketProducts.length === 0 && (
+                <section className="research-empty-market">
+                  <h3>没有匹配筛选条件的商品</h3>
+                  <p>请调整价格区间或排序方式。</p>
+                </section>
+              )}
 
               {marketProducts.length === 0 && (
                 <section className="research-empty-market">

@@ -43,9 +43,16 @@ export function Research1688Console() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [searchElapsed, setSearchElapsed] = useState(0);
 
   useEffect(() => { sessionStorage.setItem("rc_search", searchKeyword); }, [searchKeyword]);
   useEffect(() => { sessionStorage.setItem("rc_products", JSON.stringify(products)); }, [products]);
+
+  useEffect(() => {
+    if (!loading) { setSearchElapsed(0); return; }
+    const interval = setInterval(() => { setSearchElapsed((p) => p + 1); }, 1000);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const toggleProduct = useCallback((id: string) => {
     setSelected((prev) => {
@@ -190,7 +197,12 @@ export function Research1688Console() {
 
       {/* Product Grid / Table */}
       {loading && (
-        <div className="flex items-center justify-center py-20 text-steel">搜索中...</div>
+        <div className="flex flex-col items-center justify-center py-16 text-steel">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-sm font-medium">正在搜索 1688...</p>
+          <p className="mt-1 text-xs text-steel/60">关键词：{searchKeyword} · 已搜索 {searchElapsed}s · 预计 15~30s</p>
+          <p className="mt-2 text-[11px] text-steel/40">后台调用 Apify 1688 Scraper，页面不会卡顿</p>
+        </div>
       )}
       {!loading && products.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-steel">

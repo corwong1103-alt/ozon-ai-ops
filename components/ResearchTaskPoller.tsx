@@ -15,6 +15,13 @@ export function ResearchTaskPoller({ taskId, keyword }: { taskId: string; keywor
   const startTime = useRef(Date.now());
   const stopped = useRef(false);
 
+  // Persist task info so polling state can be recovered on re-entry
+  useEffect(() => {
+    if (taskId && keyword) {
+      sessionStorage.setItem("ozon_research_task", JSON.stringify({ taskId, keyword, startedAt: Date.now() }));
+    }
+  }, [taskId, keyword]);
+
   useEffect(() => {
     stopped.current = false;
     startTime.current = Date.now();

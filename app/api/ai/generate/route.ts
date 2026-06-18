@@ -14,7 +14,8 @@ export async function POST(request: Request) {
     if (mode === "image") {
       const prompt = String(body.prompt || "").trim();
       if (!prompt) return NextResponse.json({ error: "请输入生图提示词。" }, { status: 400 });
-      const result = await generateImage({ prompt, userId: user.id });
+      const referenceImage = String(body.referenceImage || "").trim() || undefined;
+      const result = await generateImage({ prompt, userId: user.id, referenceImage });
       return NextResponse.json({ imageUrl: result.url, provider: result.provider });
     }
 
