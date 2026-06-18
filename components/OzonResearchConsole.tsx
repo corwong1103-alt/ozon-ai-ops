@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { OzonMarketPoolButton, OzonPoolButton } from "@/components/OzonPoolButton";
 import { ReliableProductImage } from "@/components/ReliableProductImage";
+import { useRouter } from "next/navigation";
 import { ResearchTaskPoller } from "@/components/ResearchTaskPoller";
 import { ozonMarketCategories } from "@/lib/services/ozon-market-categories";
 import type { OzonMarketSearchResult } from "@/lib/services/ozon-market";
@@ -115,7 +116,23 @@ export function OzonResearchConsole({
   const marketProducts = marketResult.products;
   const selectedStore = stores.find((store) => store.id === selectedStoreId);
   const imageReadyCount = products.filter((product) => product.images.length > 0).length;
-  const marketImageReadyCount = marketProducts.filter((product) => product.images.length > 0).length;
+
+  // sessionStorage persistence: survive navigation away and back
+  const [savedMarketProducts, setSavedMarketProducts] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(sessionStorage.getItem("ozon_products") || "[]"); } catch { return []; }
+    }
+    return [];
+  });
+  const displayProducts = marketProducts.length > 0 ? marketProducts : savedMarketProducts;
+  const marketImageReadyCount = displayProducts.filter((product: any) => (product.images?.length || 0) > 0).length;
+
+  useEffect(() => {
+    if (marketProducts.length > 0) { sessionStorage.setItem("ozon_products", JSON.stringify(marketProducts)); setSavedMarketProducts(marketProducts); }
+  }, [marketProducts]);
+  useEffect(() => {
+    if (pendingTaskId) sessionStorage.setItem("ozon_task", JSON.stringify({ taskId: pendingTaskId, keyword: pendingKeyword || keyword, t: Date.now() }));
+  }, [pendingTaskId]);
 
   // Client-side filter controls for market section
   const [marketSort, setMarketSort] = useState("default");
@@ -123,7 +140,7 @@ export function OzonResearchConsole({
   const [marketMaxPriceStr, setMarketMaxPriceStr] = useState("");
 
   const filteredMarketProducts = useMemo(() => {
-    const items = scoredProducts?.length ? scoredProducts : marketProducts;
+    const items = scoredProducts?.length ? scoredProducts : displayProducts;
     const minP = marketMinPriceStr ? Number(marketMinPriceStr) : undefined;
     const maxP = marketMaxPriceStr ? Number(marketMaxPriceStr) : undefined;
     return [...items]

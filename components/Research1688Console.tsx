@@ -74,17 +74,26 @@ export function Research1688Console() {
   const handleSearch = useCallback(async () => {
     if (!searchKeyword.trim()) return;
     setLoading(true);
+    setSearchElapsed(0);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
       const res = await fetch("/api/sources/1688/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword: searchKeyword }),
+        signal: controller.signal,
       });
       const data = await res.json();
-      if (data.products) setProducts(data.products);
-    } catch {
-      toast("error", "1688 搜索失败，请稍后重试。");
+      if (data.products) {
+        setProducts(data.products);
+        sessionStorage.setItem("rc_products", JSON.stringify(data.products));
+      }
+    } catch (e: any) {
+      if (e.name === "AbortError") toast("error", "1688 搜索超时（30s），请重试。");
+      else toast("error", "1688 搜索失败，请稍后重试。");
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   }, [searchKeyword, toast]);

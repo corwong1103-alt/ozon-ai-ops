@@ -29,6 +29,7 @@ export const sellerNavItems: NavItem[] = [
   { href: "/dashboard", label: "首页", icon: Gauge },
   { href: "/research", label: "选品中心", icon: Search },
   { href: "/factory", label: "商品工厂", icon: Factory },
+  { href: "/products", label: "商品中心", icon: Boxes },
   { href: "/published", label: "已发布商品", icon: CheckCircle2 },
   { href: "/stores", label: "店铺管理", icon: Store },
   { href: "/membership", label: "账户中心", icon: Coins }

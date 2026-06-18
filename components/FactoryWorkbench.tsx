@@ -45,19 +45,24 @@ export function FactoryWorkbench({ product }: { product: Product }) {
 
   const callAi = useCallback(async (action: string, body: Record<string, unknown>) => {
     setLoading(action);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
     try {
       const res = await fetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
       const data = await res.json();
       if (data.error) { toast("error", data.error); return null; }
       return data;
-    } catch {
-      toast("error", "AI 调用失败");
+    } catch (e: any) {
+      if (e.name === "AbortError") toast("error", "AI 请求超时（60s），请重试。");
+      else toast("error", "AI 调用失败");
       return null;
     } finally {
+      clearTimeout(timeout);
       setLoading(null);
     }
   }, [toast]);
