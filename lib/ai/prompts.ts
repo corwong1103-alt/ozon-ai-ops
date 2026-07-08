@@ -6,6 +6,41 @@ type ProductInput = {
   price?: string | number;
 };
 
+export const NEGATIVE_PROMPT = "blurry, distorted text, deformed logos, low resolution, watermark, extra objects, text overlay";
+
+export type ProductImagePromptPreset = {
+  prompt: string;
+  strength: number;
+  negativePrompt: string;
+};
+
+function buildStructuredProductImagePrompt(product: ProductInput, input: {
+  environment: string;
+  mood: string;
+  style: string;
+  quality: string;
+}) {
+  return [
+    "Create a realistic ecommerce product photo for Ozon.",
+    `Subject: keep the original product shape, material, color, label layout, and proportions. Product: ${product.title}.`,
+    product.description ? `Product context: ${product.description}` : "",
+    product.price ? `Price context: ${product.price}` : "",
+    `Environment: ${input.environment}.`,
+    `Mood: ${input.mood}.`,
+    `Style: ${input.style}.`,
+    `Quality: ${input.quality}.`,
+    "No added text, no fake logos, no unrelated props covering the product."
+  ].filter(Boolean).join("\n");
+}
+
+function imagePreset(prompt: string, strength: number): ProductImagePromptPreset {
+  return {
+    prompt,
+    strength,
+    negativePrompt: NEGATIVE_PROMPT
+  };
+}
+
 export function buildProductTranslationPrompt(product: ProductInput) {
   return [
     "你是服务 Ozon 俄罗斯跨境电商卖家的商品本地化助手。",
@@ -62,12 +97,59 @@ export function buildSocialCopyPrompt(input: {
 }
 
 export function buildProductImagePrompt(product: ProductInput) {
-  return [
-    "生成一张 Ozon 跨境电商商品主图。",
-    "风格：干净真实的电商摄影，浅色背景，商品清晰居中，有轻微阴影，避免夸张文字和水印。",
-    `商品：${product.title}`,
-    `描述：${product.description}`
-  ].join("\n");
+  return buildMainImagePrompt(product).prompt;
+}
+
+export function buildMainImagePrompt(product: ProductInput) {
+  return {
+    prompt: buildStructuredProductImagePrompt(product, {
+    environment: "pure white background, product centered, clean tabletop shadow",
+    mood: "bright, trustworthy, marketplace-ready",
+    style: "professional ecommerce main image photography",
+    quality: "sharp focus, accurate product detail, high resolution, natural lighting"
+    }),
+    strength: 0.35,
+    negativePrompt: NEGATIVE_PROMPT
+  };
+}
+
+export function buildBackgroundImagePrompt(product: ProductInput) {
+  return {
+    prompt: buildStructuredProductImagePrompt(product, {
+    environment: "fresh light background that improves the listing while preserving the product exactly",
+    mood: "clean, premium, calm",
+    style: "commercial product photography with subtle depth",
+    quality: "sharp product edges, realistic shadows, no text overlay"
+    }),
+    strength: 0.4,
+    negativePrompt: NEGATIVE_PROMPT
+  };
+}
+
+export function buildModelImagePrompt(product: ProductInput) {
+  return {
+    prompt: buildStructuredProductImagePrompt(product, {
+    environment: "natural model usage setting for Russian ecommerce buyers",
+    mood: "credible, everyday, warm",
+    style: "realistic lifestyle photography with the product clearly visible",
+    quality: "natural skin tones, correct scale, product identity preserved"
+    }),
+    strength: 0.55,
+    negativePrompt: NEGATIVE_PROMPT
+  };
+}
+
+export function buildSceneImagePrompt(product: ProductInput) {
+  return {
+    prompt: buildStructuredProductImagePrompt(product, {
+    environment: "realistic home usage scene with simple supporting context",
+    mood: "comfortable, practical, modern",
+    style: "lifestyle ecommerce photography",
+    quality: "sharp product focus, balanced composition, no extra unrelated objects"
+    }),
+    strength: 0.55,
+    negativePrompt: NEGATIVE_PROMPT
+  };
 }
 
 export function buildProductVideoPrompt(product: ProductInput) {

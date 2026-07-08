@@ -6,6 +6,7 @@ import { OzonMarketPoolButton, OzonPoolButton } from "@/components/OzonPoolButto
 import { ReliableProductImage } from "@/components/ReliableProductImage";
 import { useRouter } from "next/navigation";
 import { ResearchTaskPoller } from "@/components/ResearchTaskPoller";
+import { usePersistentState } from "@/lib/usePersistentState";
 import { ozonMarketCategories } from "@/lib/services/ozon-market-categories";
 import type { OzonMarketSearchResult } from "@/lib/services/ozon-market";
 import type { KeywordExpansionResult } from "@/lib/services/keyword-expander";
@@ -117,22 +118,27 @@ export function OzonResearchConsole({
   const selectedStore = stores.find((store) => store.id === selectedStoreId);
   const imageReadyCount = products.filter((product) => product.images.length > 0).length;
 
-  // sessionStorage persistence: survive navigation away and back
-  const [savedMarketProducts, setSavedMarketProducts] = useState<any[]>(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(sessionStorage.getItem("ozon_products") || "[]"); } catch { return []; }
-    }
-    return [];
+  const [savedMarketProducts, setSavedMarketProducts] = usePersistentState<any[]>("ozon_products", [], {
+    ttlMs: 30 * 60 * 1000,
+    maxLength: 50,
+    userId: user.email
+  });
+  const [savedResearchTask, setSavedResearchTask] = usePersistentState<{ taskId: string; keyword: string; t: number } | null>("ozon_task", null, {
+    ttlMs: 30 * 60 * 1000,
+    userId: user.email
   });
   const displayProducts = marketProducts.length > 0 ? marketProducts : savedMarketProducts;
   const marketImageReadyCount = displayProducts.filter((product: any) => (product.images?.length || 0) > 0).length;
 
   useEffect(() => {
-    if (marketProducts.length > 0) { sessionStorage.setItem("ozon_products", JSON.stringify(marketProducts)); setSavedMarketProducts(marketProducts); }
-  }, [marketProducts]);
+    if (marketProducts.length > 0) setSavedMarketProducts(marketProducts);
+  }, [marketProducts, setSavedMarketProducts]);
   useEffect(() => {
-    if (pendingTaskId) sessionStorage.setItem("ozon_task", JSON.stringify({ taskId: pendingTaskId, keyword: pendingKeyword || keyword, t: Date.now() }));
-  }, [pendingTaskId]);
+    if (pendingTaskId) setSavedResearchTask({ taskId: pendingTaskId, keyword: pendingKeyword || keyword, t: Date.now() });
+  }, [pendingTaskId, pendingKeyword, keyword, setSavedResearchTask]);
+  const activeResearchTask = pendingTaskId
+    ? { taskId: pendingTaskId, keyword: pendingKeyword || keyword || "" }
+    : savedResearchTask;
 
   // Client-side filter controls for market section
   const [marketSort, setMarketSort] = useState("default");
@@ -164,7 +170,7 @@ export function OzonResearchConsole({
         }
         return (a.salesRank ?? 0) - (b.salesRank ?? 0);
       });
-  }, [marketSort, marketMinPriceStr, marketMaxPriceStr, marketProducts, scoredProducts]);
+  }, [marketSort, marketMinPriceStr, marketMaxPriceStr, displayProducts, scoredProducts]);
 
   return (
     <AppShell title="Ozon 调研" eyebrow="真实商品图" user={user}>
@@ -175,7 +181,7 @@ export function OzonResearchConsole({
           <p>
             {mode === "market"
               ? "选择类目或输入关键词后，会请求已配置的 Ozon 市场搜索 API；未配置时不会展示假商品。"
-              : "Seller API 只读取已绑定店铺可见商品，适合把真实店铺商品加入商品池继续做 AI 图片和文案。"}
+              : "Seller API 只读取已绑定店铺可见商品，适合把真实店铺商品加入商品制作继续处理图片和文案。"}
           </p>
         </div>
         <div className="research-mini-stats">
@@ -273,8 +279,8 @@ export function OzonResearchConsole({
             </section>
           )}
 
-          {pendingTaskId ? (
-            <ResearchTaskPoller taskId={pendingTaskId} keyword={pendingKeyword || keyword || ""} />
+          {activeResearchTask ? (
+            <ResearchTaskPoller taskId={activeResearchTask.taskId} keyword={activeResearchTask.keyword || ""} />
           ) : (
             <>
               <div className={`research-source-panel ${marketResult.mode}`}>

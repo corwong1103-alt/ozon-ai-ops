@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       imported: true,
-      message: "1688 商品已导入商品池。",
+      message: "1688 商品已加入商品制作。",
       sourceProductId: sourceProduct.id,
       productId: internalProduct.id,
       product: internalProduct

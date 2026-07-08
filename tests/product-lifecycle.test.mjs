@@ -8,7 +8,7 @@ import {
   productStatusLabel
 } from "../lib/product-lifecycle.ts";
 
-test("PRODUCT_LIFECYCLE matches the V3 product flow from architecture docs", () => {
+test("PRODUCT_LIFECYCLE keeps backend statuses but renders V6 seller labels", () => {
   assert.deepEqual(
     PRODUCT_LIFECYCLE.map((stage) => stage.key),
     [
@@ -24,14 +24,15 @@ test("PRODUCT_LIFECYCLE matches the V3 product flow from architecture docs", () 
     ]
   );
 
-  assert.equal(productStatusLabel("in_product_center"), "商品中心");
+  assert.equal(productStatusLabel("in_product_center"), "制作中");
+  assert.equal(productStatusLabel("optimized"), "待确认");
   assert.equal(productStatusLabel("archived"), "已归档");
 });
 
-test("getProductStage gives action-oriented copy for product center and archived states", () => {
-  assert.equal(getProductStage("in_product_center", 2), "已入商品中心，待处理");
-  assert.equal(getProductStage("archived", 1), "已归档，不参与当前铺品");
-  assert.equal(getProductStage("discovered", 0), "先补真实图片");
+test("getProductStage gives action-oriented V6 seller copy", () => {
+  assert.equal(getProductStage("in_product_center", 2), "等待继续制作");
+  assert.equal(getProductStage("archived", 1), "已归档，不参与当前发布流程");
+  assert.equal(getProductStage("discovered", 0), "缺少真实图片，先补来源");
 });
 
 test("getDashboardTodoCounts groups V3 statuses into the seller homepage workflow", () => {

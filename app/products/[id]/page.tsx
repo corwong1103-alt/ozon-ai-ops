@@ -8,7 +8,7 @@ import { ProductImageManager } from "@/components/ProductImageManager";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { imageList } from "@/lib/product-images";
-import { PRODUCT_LIFECYCLE } from "@/lib/product-lifecycle";
+import { SELLER_WORKFLOW_STEPS, getSellerWorkflowStep, productStatusLabel } from "@/lib/product-lifecycle";
 import { buildUploadChecklist } from "@/lib/services/ozon";
 
 function imagesToText(images: unknown) {
@@ -52,7 +52,9 @@ export default async function ProductEditPage({ params }: { params: { id: string
   ]);
 
   if (!product) notFound();
+
   const images = imageList(product.images);
+  const currentStep = getSellerWorkflowStep(product.status);
   const generatedImages = tasks
     .filter((task) => task.type === "image")
     .flatMap((task) => collectGeneratedImageUrls(task.metadata).map((url) => ({
@@ -62,169 +64,107 @@ export default async function ProductEditPage({ params }: { params: { id: string
   const latestInferredPrompt = tasks.map((task) => readInferredPrompt(task.metadata)).find(Boolean) || "";
   const latestOptimizedText = tasks.map((task) => readOptimizedText(task.metadata)).find(Boolean) || "";
 
-  const currentStageIndex = PRODUCT_LIFECYCLE.findIndex((s) => s.key === product.status);
-
   return (
-    <AppShell title={product.title} eyebrow="商品中心 · 详情" user={user}>
-      {/* 生命周期进度条 */}
-      <section className="ledger-card mb-5 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-wider text-steel">商品生命周期</p>
-          <span className="status-chip">{PRODUCT_LIFECYCLE[currentStageIndex]?.label || product.status}</span>
-        </div>
-        <div className="flex items-center gap-1 overflow-x-auto">
-          {PRODUCT_LIFECYCLE.map((stage, index) => {
-            const done = index < currentStageIndex;
-            const current = index === currentStageIndex;
-            return (
-              <div key={stage.key} className="flex items-center gap-1 whitespace-nowrap">
-                <div className={`lifecycle-node ${done ? "done" : current ? "current" : ""}`}>
-                  <span>{stage.label}</span>
-                </div>
-                {index < PRODUCT_LIFECYCLE.length - 1 && <div className={`lifecycle-bar ${done ? "done" : ""}`} />}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="ledger-card mb-5 p-5">
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-center">
+    <AppShell title={product.title} eyebrow={`${currentStep.label} / ${productStatusLabel(product.status)}`} user={user}>
+      <section className="seller-page pb-24">
+        <div className="seller-page-header">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">唯一主流程</p>
-            <h3 className="mt-1 font-display text-2xl">下一步只做一件事</h3>
-            <p className="mt-2 text-sm leading-6 text-steel">
-              默认路径：市场调研 → 商品池 → AI 优化 → 人工确认 → 发布到 Ozon → 生成推广内容。
-            </p>
+            <span className="section-kicker">Product Detail</span>
+            <h2>{currentStep.next}</h2>
+            <p>左侧确认原始信息，右侧检查 AI Workspace 输出。页面底部只保留保存和主流程动作。</p>
           </div>
-          <ProductPrimaryAction
-            productId={product.id}
-            status={product.status}
-            stores={stores}
-            defaultStoreId={product.storeId ?? ""}
-          />
+          <Link href="/factory" className="btn-secondary">返回商品制作</Link>
         </div>
-      </section>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-        {/* 模块1: 原始数据 */}
-        <section className="ledger-card p-5">
-          <div className="mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 1 · 原始数据</p>
-            <h3 className="mt-1 font-display text-2xl">商品基础信息</h3>
-          </div>
-          <ProductEditForm
-            productId={product.id}
-            title={product.title}
-            description={product.description}
-            price={Number(product.price)}
-            imagesText={imagesToText(product.images)}
-          />
-        </section>
-
-        {/* 模块2: 商品处理 */}
-        <section className="ledger-card p-5">
-          <div className="mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 2 · 商品处理</p>
-            <h3 className="mt-1 font-display text-2xl">上架前检查</h3>
-          </div>
-          <p className="mb-4 text-sm leading-6 text-steel">默认先完成 AI 优化，再由人工确认后发布到 Ozon。</p>
-
-          {/* 上架前检查清单 */}
-          <div className="mt-4 rounded-lg border border-line p-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-steel">上架前检查</p>
-            <ul className="space-y-1">
-              {buildUploadChecklist({
-                title: product.title,
-                description: product.description,
-                price: product.price,
-                images: product.images
-              }).map((item) => (
-                <li key={item.key} className="flex items-center gap-2 text-xs">
-                  <span className={item.passed ? "text-green-600" : "text-red-600"}>{item.passed ? "✓" : "✗"}</span>
-                  <span className="font-semibold text-ink">{item.label}</span>
-                  <span className="text-steel">{item.detail}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* 模块3: AI 优化 */}
-        <section className="ledger-card p-5">
-          <div className="mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 3 · AI 优化</p>
-            <h3 className="mt-1 font-display text-2xl">标题 / 卖点 / 描述 / FAQ / SEO</h3>
-          </div>
-          {latestOptimizedText ? (
-            <pre className="whitespace-pre-wrap rounded-lg border border-line bg-rail/40 p-4 text-sm leading-6 text-ink">{latestOptimizedText}</pre>
-          ) : (
-            <p className="text-sm leading-6 text-steel">点击顶部唯一主按钮“开始 AI 优化”后，这里会显示生成结果。</p>
-          )}
-        </section>
-
-        {/* 模块4: 素材中心 */}
-        <section className="ledger-card p-5">
-          <div className="mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 4 · 素材中心</p>
-            <h3 className="mt-1 font-display text-2xl">主图 / 广告图 / Banner</h3>
-          </div>
-          <AiGeneratedImagePanel productId={product.id} productImages={images} images={generatedImages} initialPrompt={latestInferredPrompt} />
-          <div className="mt-4 border-t border-line pt-4">
-            <p className="mb-2 text-xs font-bold text-steel">图片工作台</p>
-            <ProductImageManager productId={product.id} title={product.title} images={images} />
-          </div>
-        </section>
-
-        {/* 模块5: 视频中心 */}
-        <section className="ledger-card p-5" style={{ opacity: 0.7 }}>
-          <div className="mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 5 · 视频中心</p>
-            <h3 className="mt-1 font-display text-2xl">脚本 / 分镜 / 短视频</h3>
-          </div>
-          <p className="text-sm text-steel">V3 P5 阶段开放。将支持视频脚本生成、分镜规划、短视频生成。</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-lg border border-dashed border-line p-3 text-xs text-steel">视频脚本 · 待开放</div>
-            <div className="rounded-lg border border-dashed border-line p-3 text-xs text-steel">分镜规划 · 待开放</div>
-          </div>
-        </section>
-
-        {/* 模块6: 推广中心 */}
-        <section className="ledger-card p-5">
-          <div className="mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-steel">模块 6 · 推广中心</p>
-            <h3 className="mt-1 font-display text-2xl">VK / Wibes</h3>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Link href="/content" className="rounded-lg border border-line p-3 hover:bg-rail/40">
-              <strong className="text-sm">VK 发布</strong>
-              <p className="mt-1 text-xs text-steel">文案 / 图片 / 视频 · 立即或定时</p>
-            </Link>
-            <div className="rounded-lg border border-dashed border-line p-3" style={{ opacity: 0.6 }}>
-              <strong className="text-sm">Wibes</strong>
-              <p className="mt-1 text-xs text-steel">筹备中 · 即将开放</p>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {/* 任务状态 */}
-      <section className="ledger-card mt-5 p-5">
-        <h3 className="font-display text-2xl">任务状态</h3>
-        <div className="mt-4 divide-y divide-line">
-          {tasks.length === 0 && <p className="text-sm text-steel">暂无任务。</p>}
-          {tasks.map((task) => (
-            <div key={task.id} className="py-3 text-sm">
-              <div className="flex justify-between gap-3">
-                <strong>{task.type}</strong>
-                <span className="status-chip">{task.status}</span>
-              </div>
-              <p className="mt-1 text-steel">{task.message}</p>
-              <p className="mt-1 text-xs text-steel">额度消耗：{task.creditCost}</p>
+        <div className="seller-workflow">
+          {SELLER_WORKFLOW_STEPS.map((step, index) => (
+            <div key={step.label} className={`seller-workflow-step ${index === currentStep.index ? "is-active" : ""}`}>
+              <span>STEP {index + 1}</span>
+              {step.label}
             </div>
           ))}
         </div>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+          <section className="ledger-card p-5">
+            <div className="mb-4">
+              <span className="status-chip">{productStatusLabel(product.status)}</span>
+              <h3 className="mt-3 text-xl font-semibold tracking-tight text-earth">商品原始信息</h3>
+              <p className="mt-2 text-sm leading-6 text-steel">图片、标题、描述、SKU、供应商和价格在这里确认。</p>
+            </div>
+            <ProductEditForm
+              productId={product.id}
+              title={product.title}
+              description={product.description}
+              price={Number(product.price)}
+              imagesText={imagesToText(product.images)}
+            />
+          </section>
+
+          <section className="ledger-card p-5">
+            <div className="mb-4">
+              <p className="section-kicker">AI Workspace</p>
+              <h3 className="mt-1 text-xl font-semibold tracking-tight text-earth">确认 AI 生成结果</h3>
+              <p className="mt-2 text-sm leading-6 text-steel">标题、描述、图片、属性、SEO 和价格建议统一在这里检查。</p>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <h4 className="text-sm font-semibold text-earth">AI 标题与描述</h4>
+                {latestOptimizedText ? (
+                  <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-line bg-rail/40 p-4 text-sm leading-6 text-ink">{latestOptimizedText}</pre>
+                ) : (
+                  <p className="mt-3 text-sm leading-6 text-steel">暂未生成 AI 文案。回到商品制作页继续制作。</p>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-earth">AI 图片</h4>
+                <div className="mt-3">
+                  <AiGeneratedImagePanel productId={product.id} productImages={images} images={generatedImages} initialPrompt={latestInferredPrompt} />
+                </div>
+                <div className="mt-4 border-t border-line pt-4">
+                  <ProductImageManager productId={product.id} title={product.title} images={images} />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-line p-4">
+                <h4 className="text-sm font-semibold text-earth">发布前检查</h4>
+                <ul className="mt-3 space-y-2">
+                  {buildUploadChecklist({
+                    title: product.title,
+                    description: product.description,
+                    price: product.price,
+                    images: product.images
+                  }).map((item) => (
+                    <li key={item.key} className="flex items-start gap-2 text-xs">
+                      <span className={item.passed ? "text-green-600" : "text-red-600"}>{item.passed ? "✓" : "✗"}</span>
+                      <span>
+                        <strong className="text-ink">{item.label}</strong>
+                        <span className="ml-2 text-steel">{item.detail}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        </div>
       </section>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-clay bg-sand/90 px-4 py-3 backdrop-blur-xl lg:left-60">
+        <div className="mx-auto grid max-w-6xl gap-2 md:grid-cols-[1fr_auto] md:items-center">
+          <p className="text-xs text-steel">当前步骤：{currentStep.label}。下一步：{currentStep.next}。</p>
+          <div className="min-w-[260px]">
+            <ProductPrimaryAction
+              productId={product.id}
+              status={product.status}
+              stores={stores}
+              defaultStoreId={product.storeId ?? ""}
+            />
+          </div>
+        </div>
+      </div>
     </AppShell>
   );
 }

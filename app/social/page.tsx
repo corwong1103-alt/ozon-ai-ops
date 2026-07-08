@@ -76,7 +76,7 @@ export default async function SocialPage() {
                 </div>
               </div>
             ))}
-            {products.length === 0 && <p className="text-sm text-steel">商品池为空，先添加商品后再生成社媒内容。</p>}
+            {products.length === 0 && <p className="text-sm text-steel">暂无可用商品，先完成商品制作后再生成社媒内容。</p>}
           </div>
         </section>
       </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Grid3X3, List, Search, TrendingUp, DollarSign, Filter } from "lucide-react";
 import { ReliableProductImage } from "@/components/ReliableProductImage";
 import { useToast } from "@/components/Toast";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 type Product = {
   id: string;
@@ -26,27 +27,19 @@ export function Research1688Console() {
   const router = useRouter();
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("card");
-  const [searchKeyword, setSearchKeyword] = useState(() => {
-    if (typeof window !== "undefined") return sessionStorage.getItem("rc_search") || "";
-    return "";
-  });
+  const [searchKeyword, setSearchKeyword] = usePersistentState("rc_search", "", { ttlMs: 30 * 60 * 1000 });
   const [sortMode, setSortMode] = useState<SortMode>("sales");
   const [timeRange, setTimeRange] = useState<TimeRange>("30d");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(sessionStorage.getItem("rc_products") || "[]"); } catch { return []; }
-    }
-    return [];
+  const [products, setProducts] = usePersistentState<Product[]>("rc_products", [], {
+    ttlMs: 30 * 60 * 1000,
+    maxLength: 50
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [searchElapsed, setSearchElapsed] = useState(0);
-
-  useEffect(() => { sessionStorage.setItem("rc_search", searchKeyword); }, [searchKeyword]);
-  useEffect(() => { sessionStorage.setItem("rc_products", JSON.stringify(products)); }, [products]);
 
   useEffect(() => {
     if (!loading) { setSearchElapsed(0); return; }
@@ -87,7 +80,6 @@ export function Research1688Console() {
       const data = await res.json();
       if (data.products) {
         setProducts(data.products);
-        sessionStorage.setItem("rc_products", JSON.stringify(data.products));
       }
     } catch (e: any) {
       if (e.name === "AbortError") toast("error", "1688 搜索超时（30s），请重试。");
@@ -113,7 +105,7 @@ export function Research1688Console() {
         if (data.ok) success++;
       } catch { /* continue */ }
     }
-    toast("success", `已导入 ${success}/${selected.size} 件商品到商品池`);
+    toast("success", `已导入 ${success}/${selected.size} 件商品到商品制作`);
     setSelected(new Set());
     router.refresh();
     setImporting(false);

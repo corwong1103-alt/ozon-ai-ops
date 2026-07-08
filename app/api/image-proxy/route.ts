@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
 
 const blockedHosts = new Set(["example.com", "picsum.photos", "placehold.co", "placeholder.com", "images.unsplash.com"]);
 const allowedContentTypes = ["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"];
@@ -26,6 +28,61 @@ function isBlockedHost(hostname: string) {
   return blockedHosts.has(host) || host === "localhost" || host.endsWith(".localhost");
 }
 
+function ipv4ToNumber(ip: string) {
+  const parts = ip.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return parts.reduce((acc, part) => (acc << 8) + part, 0) >>> 0;
+}
+
+function isIpv4InCidr(ip: string, base: string, bits: number) {
+  const ipNumber = ipv4ToNumber(ip);
+  const baseNumber = ipv4ToNumber(base);
+  if (ipNumber === null || baseNumber === null) return false;
+  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+  return (ipNumber & mask) === (baseNumber & mask);
+}
+
+function isPrivateIpAddress(address: string) {
+  const normalized = address.toLowerCase();
+  const family = isIP(normalized);
+
+  if (family === 4) {
+    return (
+      normalized === "0.0.0.0" ||
+      isIpv4InCidr(normalized, "10.0.0.0", 8) ||
+      isIpv4InCidr(normalized, "100.64.0.0", 10) ||
+      isIpv4InCidr(normalized, "127.0.0.0", 8) ||
+      isIpv4InCidr(normalized, "169.254.0.0", 16) ||
+      isIpv4InCidr(normalized, "172.16.0.0", 12) ||
+      isIpv4InCidr(normalized, "192.168.0.0", 16)
+    );
+  }
+
+  if (family === 6) {
+    return (
+      normalized === "::" ||
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80:") ||
+      normalized.startsWith("::ffff:10.") ||
+      normalized.startsWith("::ffff:127.") ||
+      normalized.startsWith("::ffff:169.254.") ||
+      normalized.startsWith("::ffff:172.") ||
+      normalized.startsWith("::ffff:192.168.")
+    );
+  }
+
+  return false;
+}
+
+async function resolveImageTarget(hostname: string) {
+  if (isPrivateIpAddress(hostname)) return false;
+
+  const records = await lookup(hostname, { all: true, verbatim: true });
+  return records.length > 0 && records.every((record) => !isPrivateIpAddress(record.address));
+}
+
 export async function GET(request: NextRequest) {
   const rawUrl = request.nextUrl.searchParams.get("url") || "";
   let imageUrl: URL;
@@ -41,6 +98,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const isAllowedTarget = await resolveImageTarget(imageUrl.hostname);
+    if (!isAllowedTarget) {
+      return new NextResponse("Image host is not allowed", { status: 403 });
+    }
+
     const response = await fetch(imageUrl.toString(), {
       headers: {
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",

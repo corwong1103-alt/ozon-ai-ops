@@ -27,7 +27,7 @@ export function OzonPoolButton({
           try {
             const result = await addOzonProductToPool(productId, storeId);
             if (result?.ok) {
-              toast("success", result.message || "已加入商品池");
+              toast("success", result.message || "已加入商品制作");
               router.push("/products?joined=" + (result.addedCount || 1) + "&source=ozon");
               return;
             }
@@ -39,7 +39,7 @@ export function OzonPoolButton({
       }}
       type="button"
     >
-      {pending ? "入池中…" : "加入商品池"}
+      {pending ? "加入中…" : "加入商品制作"}
     </button>
   );
 }
@@ -64,7 +64,7 @@ export function OzonMarketPoolButton({
           try {
             const result = await addOzonMarketProductToPool(product, researchKeyword || "");
             if (result?.ok) {
-              toast("success", result.message || "已加入商品池");
+              toast("success", result.message || "已加入商品制作");
               router.push("/products?joined=" + (result.addedCount || 1) + "&source=ozon_market");
               return;
             }
@@ -76,7 +76,7 @@ export function OzonMarketPoolButton({
       }}
       type="button"
     >
-      {pending ? "入池中…" : "加入商品池"}
+      {pending ? "加入中…" : "加入商品制作"}
     </button>
   );
 }

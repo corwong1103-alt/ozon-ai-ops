@@ -34,6 +34,11 @@ export function AuthPanel({ mode }: { mode: "login" | "register" }) {
     }
 
     const data = await response.json();
+    try {
+      if (data.user?.id) sessionStorage.setItem("ozon_user_id", data.user.id);
+    } catch {
+      // Login should not fail when browser storage is unavailable.
+    }
     toast("success", mode === "login" ? "登录成功，正在跳转…" : "注册成功，待管理员审核后即可使用。");
     router.push(data.redirectTo || "/dashboard");
   }

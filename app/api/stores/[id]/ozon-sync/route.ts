@@ -111,12 +111,69 @@ export async function POST(request: Request, { params }: { params: { id: string 
         total: products.length,
         created,
         updated,
-        summary: `商品池已同步：新增 ${created}，更新 ${updated}。`
+        summary: `商品制作已同步：新增 ${created}，更新 ${updated}。`
       }
     });
   }
 
   const orders = await getOzonOrdersForImport(store, 30);
+  let created = 0;
+  let updated = 0;
+  let orderItems = 0;
+
+  for (const order of orders) {
+    if (!order.postingNumber) continue;
+    const existing = await prisma.order.findUnique({ where: { ozonOrderId: order.postingNumber } });
+    const items = await Promise.all(order.items.map(async (item) => {
+      const product = item.offerId
+        ? await prisma.product.findFirst({
+            where: {
+              userId: user.id,
+              storeId: store.id,
+              offerId: item.offerId
+            },
+            select: { id: true }
+          })
+        : null;
+      return {
+        productId: product?.id,
+        skuId: item.skuId,
+        title: item.title,
+        quantity: item.quantity,
+        unitPrice: item.price
+      };
+    }));
+
+    await prisma.order.upsert({
+      where: { ozonOrderId: order.postingNumber },
+      update: {
+        status: order.status || "pending",
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        trackingNo: order.postingNumber,
+        items: {
+          deleteMany: {},
+          create: items
+        }
+      },
+      create: {
+        storeId: store.id,
+        ozonOrderId: order.postingNumber,
+        status: order.status || "pending",
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        trackingNo: order.postingNumber,
+        items: {
+          create: items
+        }
+      }
+    });
+
+    if (existing) updated += 1;
+    else created += 1;
+    orderItems += items.length;
+  }
+
   await prisma.taskLog.create({
     data: {
       userId: user.id,
@@ -128,6 +185,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
       metadata: {
         mode,
         total: orders.length,
+        created,
+        updated,
+        orderItems,
         sample: orders.slice(0, 10)
       }
     }
@@ -138,9 +198,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
       ok: true,
       mode,
       total: orders.length,
-      created: orders.length,
-      updated: 0,
-      summary: orders.length ? `订单摘要已写入任务记录：${orders.length} 条。` : "近 30 天暂无 FBS 订单，已写入任务记录。"
+      created,
+      updated,
+      summary: orders.length ? `订单已同步：新增 ${created}，更新 ${updated}，明细 ${orderItems} 条。` : "近 30 天暂无 FBS 订单，已写入任务记录。"
     }
   });
 }

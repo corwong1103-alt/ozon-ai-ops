@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDashscopeRuntimeConfig } from "@/lib/integrations";
+import { extractTaskImageUrl } from "@/lib/ai/task-image-url";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -19,6 +20,8 @@ type MediaInput = {
   model?: string;
   userId?: string;
   referenceImage?: string;
+  strength?: number;
+  negativePrompt?: string;
 };
 
 type AiProvider = "mock" | "dashscope";
@@ -66,14 +69,43 @@ function normalizeImageSize(size: string) {
   return size.includes("x") ? size.replace("x", "*") : size;
 }
 
-async function dashscopeNativeFetch(config: Awaited<ReturnType<typeof getDashscopeRuntimeConfig>>, path: string, body: unknown) {
+async function dashscopeNativeFetch(
+  config: Awaited<ReturnType<typeof getDashscopeRuntimeConfig>>,
+  path: string,
+  body: unknown,
+  headers?: Record<string, string>
+) {
   const response = await fetch(`${dashscopeNativeBaseUrl(config.baseUrl)}${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${ensureDashscopeKey(config.apiKey)}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...headers
     },
     body: JSON.stringify(body)
+  });
+
+  const text = await response.text();
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    throw new Error(`DashScope native request failed: ${response.status} ${typeof data === "string" ? data : JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
+async function dashscopeNativeGet(config: Awaited<ReturnType<typeof getDashscopeRuntimeConfig>>, path: string) {
+  const response = await fetch(`${dashscopeNativeBaseUrl(config.baseUrl)}${path}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${ensureDashscopeKey(config.apiKey)}`
+    }
   });
 
   const text = await response.text();
@@ -112,6 +144,29 @@ function extractNativeImageUrl(data: unknown) {
   return "";
 }
 
+function extractTaskId(data: unknown) {
+  if (!data || typeof data !== "object") return "";
+  const output = (data as Record<string, unknown>).output;
+  if (output && typeof output === "object") {
+    const taskId = (output as Record<string, unknown>).task_id;
+    if (typeof taskId === "string") return taskId;
+  }
+  const taskId = (data as Record<string, unknown>).task_id;
+  return typeof taskId === "string" ? taskId : "";
+}
+
+function extractTaskStatus(data: unknown) {
+  if (!data || typeof data !== "object") return "";
+  const output = (data as Record<string, unknown>).output;
+  if (!output || typeof output !== "object") return "";
+  const status = (output as Record<string, unknown>).task_status;
+  return typeof status === "string" ? status : "";
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function generateText(input: GenerateTextInput) {
   const config = await getDashscopeRuntimeConfig(input.userId);
   if (!shouldUseDashscope(config)) {
@@ -132,6 +187,66 @@ export async function generateText(input: GenerateTextInput) {
   return content;
 }
 
+export async function generateImageEdit(input: MediaInput & { referenceImage: string }) {
+  const config = await getDashscopeRuntimeConfig(input.userId);
+  if (!shouldUseDashscope(config)) {
+    return {
+      url: "",
+      provider: "mock",
+      prompt: input.prompt
+    };
+  }
+
+  const data = await dashscopeNativeFetch(config, "/api/v1/services/aigc/image2image/image-synthesis", {
+    model: input.model || process.env.DASHSCOPE_IMAGE_EDIT_MODEL || "wanx2.1-imageedit",
+    input: {
+      function: "description_edit",
+      prompt: input.prompt,
+      base_image_url: input.referenceImage,
+      negative_prompt: input.negativePrompt
+    },
+    parameters: {
+      n: 1,
+      size: normalizeImageSize(config.imageSize),
+      strength: input.strength ?? 0.4,
+      prompt_extend: true,
+      watermark: false
+    }
+  }, {
+    "X-DashScope-Async": "enable"
+  });
+
+  const taskId = extractTaskId(data);
+  if (!taskId) {
+    return {
+      url: extractNativeImageUrl(data) || extractTaskImageUrl(data),
+      provider: "dashscope",
+      prompt: input.prompt,
+      raw: data
+    };
+  }
+
+  let latest: unknown = data;
+  for (let elapsedMs = 0; elapsedMs < 60000; elapsedMs += 2000) {
+    await sleep(2000);
+    latest = await dashscopeNativeGet(config, `/api/v1/tasks/${taskId}`);
+    const status = extractTaskStatus(latest);
+    if (status === "SUCCEEDED") {
+      return {
+        url: extractTaskImageUrl(latest),
+        provider: "dashscope",
+        prompt: input.prompt,
+        raw: latest
+      };
+    }
+    if (["FAILED", "CANCELED", "UNKNOWN"].includes(status)) {
+      throw new Error(`DashScope image edit task failed: ${JSON.stringify(latest)}`);
+    }
+  }
+
+  throw new Error(`DashScope image edit task timed out: ${taskId}`);
+}
+
 export async function generateImage(input: MediaInput) {
   const config = await getDashscopeRuntimeConfig(input.userId);
   if (!shouldUseDashscope(config)) {
@@ -142,11 +257,15 @@ export async function generateImage(input: MediaInput) {
     };
   }
 
-  const content: Record<string, string>[] = [];
   if (input.referenceImage) {
-    content.push({ image: input.referenceImage });
+    return generateImageEdit({ ...input, referenceImage: input.referenceImage });
   }
-  content.push({ text: input.prompt });
+
+  const prompt = input.negativePrompt
+    ? `${input.prompt}\n\nNegative prompt: ${input.negativePrompt}`
+    : input.prompt;
+  const content: Record<string, string>[] = [];
+  content.push({ text: prompt });
 
   const data = await dashscopeNativeFetch(config, "/api/v1/services/aigc/multimodal-generation/generation", {
     model: input.model || config.imageModel,
@@ -169,7 +288,7 @@ export async function generateImage(input: MediaInput) {
   return {
     url: extractNativeImageUrl(data),
     provider: "dashscope",
-    prompt: input.prompt,
+    prompt,
     raw: data
   };
 }

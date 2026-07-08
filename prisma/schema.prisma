@@ -137,6 +137,8 @@ model User {
   products        Product[]
   taskLogs        TaskLog[]
   integrations    ApiIntegration[]
+  payments        Payment[]
+  subscriptions   Subscription[]
   socialAccounts  SocialAccount[]
   socialPosts     SocialPost[]
   customerMessages CustomerMessage[]
@@ -201,6 +203,7 @@ model Store {
   ozonClientId String
   apiKeyEncrypted String
   products    Product[]
+  orders      Order[]
   taskLogs    TaskLog[]
   customerMessages CustomerMessage[]
   createdAt   DateTime @default(now())
@@ -225,6 +228,8 @@ model Product {
   currency    String        @default("CNY")
   images      Json          @default("[]")
   status      ProductStatus @default(discovered)
+  variants    ProductVariant[]
+  orderItems  OrderItem[]
   socialPosts SocialPost[]
   taskLogs    TaskLog[]
   createdAt   DateTime      @default(now())
@@ -235,6 +240,88 @@ model Product {
   @@index([status])
   @@index([source])
   @@index([sourceProductId])
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  storeId      String
+  store        Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ozonOrderId  String?     @unique
+  status       String      @default("pending")
+  totalAmount  Decimal     @db.Decimal(12, 2)
+  currency     String      @default("RUB")
+  buyerName    String?
+  shippingAddr String?
+  trackingNo   String?
+  items        OrderItem[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  skuId     String?
+  title     String
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(12, 2)
+
+  @@index([orderId])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku       String  @unique
+  color     String?
+  size      String?
+  spec      String?
+  price     Decimal @db.Decimal(12, 2)
+  stock     Int     @default(0)
+
+  @@index([productId])
+}
+
+model Inventory {
+  id          String   @id @default(cuid())
+  skuId       String   @unique
+  available   Int      @default(0)
+  reserved    Int      @default(0)
+  safetyStock Int      @default(0)
+  updatedAt   DateTime @updatedAt
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  amount     Decimal  @db.Decimal(12, 2)
+  currency   String   @default("CNY")
+  method     String
+  status     String   @default("pending")
+  externalNo String?  @unique
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Subscription {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  plan    UserPlan
+  status  String   @default("active")
+  startAt DateTime @default(now())
+  endAt   DateTime?
+
+  @@index([userId])
 }
 
 model SocialAccount {

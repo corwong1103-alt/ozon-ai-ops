@@ -15,9 +15,9 @@ export default async function FactoryWorkbenchPage({ params }: { params: { id: s
   if (!product) notFound();
 
   return (
-    <AppShell title="商品工厂" eyebrow="AI 工作台" user={user}>
+    <AppShell title="商品制作" eyebrow="STEP 2 / AI Workspace" user={user}>
       <Link href="/factory" className="mb-4 inline-flex items-center gap-1 text-xs text-steel hover:text-earth">
-        <ArrowLeft size={13} /> 返回商品工厂
+        <ArrowLeft size={13} /> 返回商品制作
       </Link>
       <FactoryWorkbench product={{
         id: product.id,

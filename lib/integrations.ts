@@ -47,7 +47,7 @@ export const integrationDefinitions: IntegrationDefinition[] = [
     provider: "ozon_market",
     name: "Apify Ozon Market",
     shortName: "Apify Ozon",
-    description: "用于真实搜索 Ozon 全站商品、类目商品和商品详情，并把结果加入商品池。",
+    description: "用于真实搜索 Ozon 全站商品、类目商品和商品详情，并把结果加入商品制作。",
     secretLabel: "Apify API Token",
     secretPlaceholder: "apify_api_xxxxxxxxxxxx",
     help: "在 Apify 账号 Settings / Integrations 中复制 API Token；Actor ID 默认使用 zen-studio/ozon-scraper-pro，可按实际购买的 Actor 修改。",

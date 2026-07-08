@@ -181,7 +181,7 @@ export function ProductPrimaryAction({
       <button className="btn-primary w-full" disabled={disabled} type="submit">
         {pending ? "处理中…" : stores.length === 0 && action.intent === "publish" ? "先绑定 Ozon 店铺" : action.label}
       </button>
-      <p className="text-xs text-steel">唯一主流程：市场调研 → 商品池 → AI 优化 → 人工确认 → 发布到 Ozon → 生成推广内容。</p>
+      <p className="text-xs text-steel">唯一主流程：发现商品 → 制作商品 → 确认商品 → 发布商品。</p>
     </form>
   );
 }

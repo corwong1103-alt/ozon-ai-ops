@@ -1,17 +1,16 @@
 import Link from "next/link";
-import { Boxes, ImageIcon, PackageSearch, Rocket } from "lucide-react";
+import { CheckCircle2, Clock3, PackageSearch, Rocket, Sparkles, Store } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { ReliableProductImage } from "@/components/ReliableProductImage";
+import { SellerProductCard } from "@/components/SellerProductCard";
 import { requireApprovedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { imageList } from "@/lib/product-images";
-import { getDashboardTodoCounts, productStatusLabel, type ProductStatus, type ProductStatusCounts } from "@/lib/product-lifecycle";
-import { getProductNextAction, productSourceFilterLabel } from "@/lib/product-main-flow";
+import { SELLER_WORKFLOW_STEPS, getDashboardTodoCounts, type ProductStatus, type ProductStatusCounts } from "@/lib/product-lifecycle";
 
 function ProductTaskList({
   title,
   empty,
-  products
+  products,
+  hrefPrefix = "/products"
 }: {
   title: string;
   empty: string;
@@ -23,29 +22,21 @@ function ProductTaskList({
     images: unknown;
     price: unknown;
     currency: string;
+    updatedAt: Date;
   }>;
+  hrefPrefix?: "/products" | "/factory";
 }) {
   return (
     <section className="dashboard-panel tasks">
       <div className="dashboard-panel-title">
         <span>{title}</span>
-        <Link href="/products">商品池</Link>
+        <Link href={hrefPrefix === "/factory" ? "/factory" : "/products"}>查看全部</Link>
       </div>
       <div className="dashboard-task-list">
         {products.length === 0 && <p className="dashboard-empty">{empty}</p>}
-        {products.map((product) => {
-          const images = imageList(product.images);
-          const action = getProductNextAction(product.status, product.id);
-          return (
-            <div key={product.id} className="dashboard-task-row">
-              <ReliableProductImage images={images} alt={product.title} className="h-10 w-10 rounded-md object-cover" emptyLabel="无图" />
-              <strong>{product.title.slice(0, 24)}</strong>
-              <span>{productStatusLabel(product.status)}</span>
-              <p>{productSourceFilterLabel(product.source)} · {Number(product.price).toFixed(2)} {product.currency}</p>
-              <Link href={action.href} className="btn-primary px-3 py-1 text-xs">继续处理</Link>
-            </div>
-          );
-        })}
+        {products.map((product) => (
+          <SellerProductCard key={product.id} product={product} hrefPrefix={hrefPrefix} />
+        ))}
       </div>
     </section>
   );
@@ -72,10 +63,10 @@ export default async function DashboardPage() {
   const todoCounts = getDashboardTodoCounts(lifecycleCounts);
   const publishedCount = productCounts.find((c) => c.status === "published")?._count._all ?? 0;
   const todoCards = [
-    { label: "待处理商品", value: todoCounts.pending, href: "/products", icon: PackageSearch, hint: "已入池，待开始" },
-    { label: "AI 优化中", value: todoCounts.optimizing, href: "/products", icon: ImageIcon, hint: "生成中或待查看" },
-    { label: "待发布", value: todoCounts.readyToPublish, href: "/products", icon: Boxes, hint: "已优化/已确认" },
-    { label: "已发布", value: publishedCount, href: "/content", icon: Rocket, hint: "可生成推广内容" }
+    { label: "待筛选", value: todoCounts.pending, href: "/research", icon: PackageSearch, hint: "先挑出值得制作的商品" },
+    { label: "制作中", value: todoCounts.optimizing, href: "/factory", icon: Sparkles, hint: "继续整理标题、描述和图片" },
+    { label: "待发布", value: todoCounts.readyToPublish, href: "/factory/drafts", icon: Rocket, hint: "确认后即可发布" },
+    { label: "已发布", value: publishedCount, href: "/published", icon: CheckCircle2, hint: "查看已上架商品" }
   ];
 
   const pendingProducts = taskProducts.filter((product) => product.status === "discovered" || product.status === "in_product_center" || product.status === "favorited");
@@ -83,42 +74,72 @@ export default async function DashboardPage() {
   const readyProducts = taskProducts.filter((product) => product.status === "optimized" || product.status === "ready_to_publish");
 
   return (
-    <AppShell title="卖家工作台" eyebrow="Task Board" user={user}>
-      <section className="dashboard-board">
-        <div className="dashboard-topline">
+    <AppShell title="首页" eyebrow="今天该做什么" user={user}>
+      <section className="seller-page">
+        <div className="seller-page-header">
           <div>
-            <p className="section-kicker">任务看板</p>
-            <h3>从市场调研到 Ozon 上架，只保留当前要处理的商品。</h3>
+            <span className="section-kicker">Seller Workflow</span>
+            <h2>今天只推进下一步</h2>
+            <p>从发现商品到发布商品，首页只显示需要你处理的任务。其它系统数据已折叠到对应页面。</p>
           </div>
-          <div className="dashboard-user-strip">
-            <span>{user.plan}</span>
-            <span>{user.status}</span>
-          </div>
+          <Link href="/research" className="btn-primary">发现商品</Link>
         </div>
 
-        <div className="dashboard-kpi-grid">
-          {todoCards.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.label} href={item.href} className="dashboard-kpi-card">
-                <div className="dashboard-kpi-head">
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                </div>
-                <div className="dashboard-kpi-value">
-                  <strong>{item.value}</strong>
-                  <span>件</span>
-                </div>
-                <p>{item.hint}</p>
-              </Link>
-            );
-          })}
+        <div className="seller-workflow">
+          {SELLER_WORKFLOW_STEPS.map((step, index) => (
+            <div key={step.label} className={`seller-workflow-step ${index === 0 ? "is-active" : ""}`}>
+              <span>STEP {index + 1}</span>
+              {step.label}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="dashboard-kpi-grid">
+            {todoCards.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.label} href={item.href} className="dashboard-kpi-card">
+                  <div className="dashboard-kpi-head">
+                    <Icon size={16} />
+                    <span>{item.label}</span>
+                  </div>
+                  <div className="dashboard-kpi-value">
+                    <strong>{item.value}</strong>
+                    <span>件</span>
+                  </div>
+                  <p>{item.hint}</p>
+                </Link>
+              );
+            })}
+          </div>
+
+          <aside className="ledger-card p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-earth">
+              <Store size={16} />
+              店铺状态
+            </div>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-steel">账户</span>
+                <strong>{user.plan}</strong>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-steel">授权</span>
+                <strong>{user.status}</strong>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-steel">最近任务</span>
+                <strong className="inline-flex items-center gap-1"><Clock3 size={13} /> {taskProducts.length}</strong>
+              </div>
+            </div>
+          </aside>
         </div>
 
         <div className="dashboard-main-grid mt-5">
-          <ProductTaskList title="待处理商品" empty="暂无待处理商品，先去市场调研加入商品池。" products={pendingProducts} />
-          <ProductTaskList title="AI 优化中" empty="暂无 AI 优化中的商品。" products={optimizingProducts} />
-          <ProductTaskList title="待发布商品" empty="暂无待发布商品，先完成人工确认。" products={readyProducts} />
+          <ProductTaskList title="待处理商品" empty="暂无待处理商品，先去发现商品。" products={pendingProducts} />
+          <ProductTaskList title="制作中" empty="暂无制作中的商品。" products={optimizingProducts} hrefPrefix="/factory" />
+          <ProductTaskList title="待发布" empty="暂无待发布商品，先完成人工确认。" products={readyProducts} hrefPrefix="/factory" />
         </div>
       </section>
     </AppShell>

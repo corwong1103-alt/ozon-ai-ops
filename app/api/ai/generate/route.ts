@@ -15,7 +15,9 @@ export async function POST(request: Request) {
       const prompt = String(body.prompt || "").trim();
       if (!prompt) return NextResponse.json({ error: "请输入生图提示词。" }, { status: 400 });
       const referenceImage = String(body.referenceImage || "").trim() || undefined;
-      const result = await generateImage({ prompt, userId: user.id, referenceImage });
+      const strength = Number.isFinite(Number(body.strength)) ? Number(body.strength) : undefined;
+      const negativePrompt = String(body.negativePrompt || "").trim() || undefined;
+      const result = await generateImage({ prompt, userId: user.id, referenceImage, strength, negativePrompt });
       return NextResponse.json({ imageUrl: result.url, provider: result.provider });
     }
 

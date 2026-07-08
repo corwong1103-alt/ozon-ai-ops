@@ -267,7 +267,7 @@ export function OzonStoreConsole({ stores }: { stores: StoreConsoleItem[] }) {
                   onClick={() => runSync(store.id, "products")}
                 >
                   {loading[`${store.id}:sync:products`] ? <RefreshCw size={17} className="animate-spin" /> : <DatabaseZap size={17} />}
-                  同步真实商品到商品池
+                  同步真实商品到商品制作
                 </button>
                 <button
                   className="btn-secondary"
@@ -279,10 +279,10 @@ export function OzonStoreConsole({ stores }: { stores: StoreConsoleItem[] }) {
                 </button>
                 <div className="store-path-card">
                   <p>完整测试路径</p>
-                  <p>同步商品后去商品池处理标题、描述、图片；同步订单后去任务记录确认链路。AI 生图/视频最后再测。</p>
+                  <p>同步商品后进入商品制作，处理标题、描述和图片；同步订单后再确认链路。</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Link href="/products">
-                      去商品池 <ArrowRight size={13} />
+                      去商品制作 <ArrowRight size={13} />
                     </Link>
                     <Link href="/tasks">
                       去任务记录 <ArrowRight size={13} />

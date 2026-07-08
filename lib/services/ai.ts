@@ -44,6 +44,9 @@ export async function runCreditAiTask(input: {
   kind: AiKind;
   message: string;
   prompt?: string;
+  referenceImage?: string;
+  strength?: number;
+  negativePrompt?: string;
   onSuccess?: () => Promise<unknown>;
 }) {
   const field = creditField[input.kind];
@@ -85,7 +88,13 @@ export async function runCreditAiTask(input: {
   try {
     const aiResult = input.prompt
       ? input.kind === "image"
-        ? await generateImage({ prompt: input.prompt, userId: input.userId })
+        ? await generateImage({
+            prompt: input.prompt,
+            userId: input.userId,
+            referenceImage: input.referenceImage,
+            strength: input.strength,
+            negativePrompt: input.negativePrompt
+          })
         : await generateVideo({ prompt: input.prompt, userId: input.userId })
       : null;
     await input.onSuccess?.();

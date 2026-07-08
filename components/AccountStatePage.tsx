@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Clock, ShieldAlert } from "lucide-react";
+import { LogoutForm } from "@/components/LogoutForm";
 
 export function AccountStatePage({
   title,
@@ -21,9 +22,7 @@ export function AccountStatePage({
         <p className="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-accent">Ozon AI Ops</p>
         <h1 className="mt-3 font-display text-4xl text-ink">{title}</h1>
         <p className="mt-4 leading-7 text-steel">{description}</p>
-        <form action="/api/auth/logout" method="post" className="mt-7">
-          <button className="btn-primary">退出登录</button>
-        </form>
+        <LogoutForm className="mt-7" />
         <Link href="/login" className="mt-4 inline-block text-sm font-semibold text-accent">
           返回登录页
         </Link>

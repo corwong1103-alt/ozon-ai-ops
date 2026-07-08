@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 type TaskStatus = "queued" | "processing" | "success" | "failed";
 
@@ -14,13 +15,15 @@ export function ResearchTaskPoller({ taskId, keyword }: { taskId: string; keywor
   const [retrying, setRetrying] = useState(false);
   const startTime = useRef(Date.now());
   const stopped = useRef(false);
+  const [, setSavedResearchTask] = usePersistentState<{ taskId: string; keyword: string; t: number } | null>("ozon_task", null, {
+    ttlMs: 30 * 60 * 1000
+  });
 
-  // Persist task info so polling state can be recovered on re-entry
   useEffect(() => {
     if (taskId && keyword) {
-      sessionStorage.setItem("ozon_research_task", JSON.stringify({ taskId, keyword, startedAt: Date.now() }));
+      setSavedResearchTask({ taskId, keyword, t: Date.now() });
     }
-  }, [taskId, keyword]);
+  }, [taskId, keyword, setSavedResearchTask]);
 
   useEffect(() => {
     stopped.current = false;

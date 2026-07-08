@@ -28,20 +28,20 @@ export function getProductNextAction(status: string, productId: string): Product
   const href = `/products/${productId}`;
   switch (status as ProductStatus) {
     case "discovered":
-      return { label: "加入商品池", href, intent: "pool" };
+      return { label: "加入商品制作", href, intent: "pool" };
     case "favorited":
-      return { label: "加入商品中心", href, intent: "pool" };
+      return { label: "加入商品制作", href, intent: "pool" };
     case "in_product_center":
-      return { label: "开始 AI 优化", href, intent: "optimize" };
+      return { label: "继续制作", href, intent: "optimize" };
     case "optimizing":
-      return { label: "查看优化进度", href, intent: "progress" };
+      return { label: "继续制作", href, intent: "progress" };
     case "optimized":
-      return { label: "人工确认", href, intent: "confirm" };
+      return { label: "确认商品", href, intent: "confirm" };
     case "ready_to_publish":
-      return { label: "发布到 Ozon", href, intent: "publish" };
+      return { label: "立即发布", href, intent: "publish" };
     case "published":
     case "promoted":
-      return { label: "生成推广内容", href, intent: "promote" };
+      return { label: "查看商品", href, intent: "promote" };
     case "archived":
       return { label: "已归档", href, intent: "archived" };
     default:
@@ -54,7 +54,7 @@ export function isContentEligibleProduct(status: string) {
 }
 
 export function productSourceFilterLabel(source: string) {
-  if (source === "ozon_market") return "市场调研";
+  if (source === "ozon_market") return "Ozon";
   if (source === "ozon") return "店铺同步";
   if (source === "manual") return "手动创建";
   if (source === "source_1688") return "1688";

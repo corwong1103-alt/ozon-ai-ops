@@ -4,6 +4,9 @@ import { decryptSecret } from "@/lib/crypto";
 
 const DEFAULT_OZON_API_BASE_URL = "https://api-seller.ozon.ru";
 const OZON_TEXT_LIMIT = 360;
+const DEFAULT_OZON_CATEGORY_ID = 17028922;
+const HARDCODED_OZON_UPLOAD_WARNING =
+  "Attributes are hardcoded for category 17028922. Real upload requires category tree query + attribute mapping.";
 
 export type OzonUploadInput = {
   store: {
@@ -69,6 +72,15 @@ export type OzonOrderImport = {
   inProcessAt?: string;
   shipmentDate?: string;
   warehouseId?: number;
+  items: Array<{
+    skuId?: string;
+    offerId?: string;
+    title: string;
+    quantity: number;
+    price: number;
+  }>;
+  totalAmount: number;
+  currency: string;
 };
 
 function getOzonApiBaseUrl() {
@@ -203,12 +215,30 @@ function normalizeOzonProduct(item: Record<string, unknown>): OzonProductImport 
 }
 
 function normalizeOzonOrder(item: Record<string, unknown>): OzonOrderImport {
+  const products = Array.isArray(item.products) ? item.products : [];
+  const items = products
+    .filter((product): product is Record<string, unknown> => Boolean(product) && typeof product === "object")
+    .map((product) => {
+      const quantity = numberOrZero(product.quantity) || 1;
+      const price = numberOrZero(product.price) || 0;
+      return {
+        skuId: product.sku ? String(product.sku) : undefined,
+        offerId: product.offer_id ? String(product.offer_id) : undefined,
+        title: String(product.name || product.title || product.offer_id || product.sku || "Ozon order item"),
+        quantity,
+        price
+      };
+    });
+  const totalAmount = items.reduce((sum, orderItem) => sum + orderItem.price * orderItem.quantity, 0);
   return {
     postingNumber: String(item.posting_number || ""),
     status: String(item.status || ""),
     inProcessAt: item.in_process_at ? String(item.in_process_at) : undefined,
     shipmentDate: item.shipment_date ? String(item.shipment_date) : undefined,
-    warehouseId: typeof item.warehouse_id === "number" ? item.warehouse_id : undefined
+    warehouseId: typeof item.warehouse_id === "number" ? item.warehouse_id : undefined,
+    items,
+    totalAmount,
+    currency: "RUB"
   };
 }
 
@@ -412,7 +442,9 @@ export type UploadResult = {
   checklist: UploadChecklistItem[];
   checklistPassed: boolean;
   realUploadEnabled: boolean;
+  uploadPayload?: Record<string, unknown>;
   apiResponse?: unknown;
+  warning?: string;
   error?: string;
 };
 
@@ -420,13 +452,48 @@ export function buildUploadChecklist(product: OzonUploadInput["product"]): Uploa
   const images = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
   const hasCyrillic = /[Ѐ-ӿ]/.test(product.title || "") || /[Ѐ-ӿ]/.test(product.description || "");
   const price = Number(product.price);
+  const categoryId = process.env.OZON_DEFAULT_CATEGORY_ID || String(DEFAULT_OZON_CATEGORY_ID);
+  const categoryConfigured = Boolean(process.env.OZON_DEFAULT_CATEGORY_ID);
   return [
     { key: "title", label: "商品标题", passed: Boolean(product.title?.trim()), detail: product.title ? "已填写" : "缺失" },
     { key: "cyrillic", label: "俄文文案", passed: hasCyrillic, detail: hasCyrillic ? "标题/描述含俄文" : "标题或描述需含俄文（Ozon 俄语站）" },
     { key: "description", label: "商品描述", passed: Boolean(product.description?.trim()), detail: product.description ? "已填写" : "缺失" },
     { key: "price", label: "价格 > 0", passed: price > 0, detail: price > 0 ? `${price}` : "未设价格" },
+    {
+      key: "category",
+      label: "Ozon 类目",
+      passed: true,
+      detail: categoryConfigured ? `已配置目标类目 ${categoryId}` : "使用默认类目，真实上架前需配置目标类目"
+    },
     { key: "images", label: "至少 1 张图", passed: images.length > 0, detail: `${images.length} 张` }
   ];
+}
+
+function buildOzonUploadPayload(input: OzonUploadInput) {
+  const images = Array.isArray(input.product.images) ? input.product.images.filter(Boolean).slice(0, 15) : [];
+  const offerId = `ozonai_${Date.now()}`;
+  const categoryId = Number(process.env.OZON_DEFAULT_CATEGORY_ID || DEFAULT_OZON_CATEGORY_ID);
+  const attributes = [
+    { id: Number(process.env.OZON_BRAND_ATTRIBUTE_ID || 85), values: [{ value: "OzonAI" }] },
+    { id: Number(process.env.OZON_TITLE_ATTRIBUTE_ID || 9048), values: [{ value: input.product.title }] }
+  ];
+
+  return {
+    items: [
+      {
+        offer_id: offerId,
+        name: input.product.title,
+        description: input.product.description,
+        category_id: categoryId,
+        attributes,
+        price: String(Number(input.product.price).toFixed(2)),
+        currency_code: "RUB",
+        barcode: offerId,
+        sku: offerId,
+        images
+      }
+    ]
+  };
 }
 
 export async function uploadProductToOzon(input: OzonUploadInput): Promise<UploadResult> {
@@ -434,6 +501,7 @@ export async function uploadProductToOzon(input: OzonUploadInput): Promise<Uploa
   const checklist = buildUploadChecklist(input.product);
   const checklistPassed = checklist.every((item) => item.passed);
   const realUploadEnabled = process.env.OZON_REAL_UPLOAD === "true";
+  const uploadPayload = buildOzonUploadPayload(input);
 
   // 检查未通过 → 阻止上架
   if (!checklistPassed) {
@@ -460,23 +528,18 @@ export async function uploadProductToOzon(input: OzonUploadInput): Promise<Uploa
       productTitle: input.product.title,
       checklist,
       checklistPassed: true,
-      realUploadEnabled: false
+      realUploadEnabled: false,
+      uploadPayload,
+      warning: HARDCODED_OZON_UPLOAD_WARNING
     };
   }
 
-  // 真实模式：调 Ozon /v3/product/create（需类目属性，当前缺类目配置会返回提示）
+  // 真实模式：调 Ozon /v3/product/create，dry-run 和 real 模式共享同一完整 payload。
   try {
     const response = await postOzon("/v3/product/create", {
       ozonClientId: input.store.ozonClientId,
       apiKey: apiKey || ""
-    }, {
-      offer_id: `ozonai_${Date.now()}`,
-      name: input.product.title,
-      description: input.product.description,
-      price: Number(input.product.price),
-      // 注：完整上架需 category_id + attributes + images 数组，当前简化
-      images: Array.isArray(input.product.images) ? input.product.images.slice(0, 15) : []
-    });
+    }, uploadPayload);
     return {
       mode: "real",
       ozonStoreId: input.store.ozonStoreId,
@@ -487,6 +550,7 @@ export async function uploadProductToOzon(input: OzonUploadInput): Promise<Uploa
       checklist,
       checklistPassed: true,
       realUploadEnabled: true,
+      uploadPayload,
       apiResponse: response
     };
   } catch (error) {

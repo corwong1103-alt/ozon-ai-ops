@@ -88,7 +88,7 @@ export async function addOzonProductToPool(productId: string, storeId: string) {
       type: "research",
       status: "success",
       creditCost: 0,
-      message: `已将 Ozon 真实 API 商品加入商品池：${ozonProduct.name}`,
+      message: `已将 Ozon 真实商品加入商品制作：${ozonProduct.name}`,
       metadata: {
         source: "ozon_seller_api",
         endpoint: "/v3/product/info/list",
@@ -108,8 +108,8 @@ export async function addOzonProductToPool(productId: string, storeId: string) {
     productId: product.id,
     addedCount: 1,
     message: existing
-      ? "已加入商品池"
-      : "已加入商品池"
+      ? "已加入商品制作"
+      : "已加入商品制作"
   };
 }
 
@@ -140,7 +140,7 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct, res
   if (!images.length) {
     return {
       ok: false,
-      message: "入池失败：这个市场商品没有真实图片链接，不能进入商品池。"
+      message: "加入失败：这个市场商品没有真实图片链接，不能进入商品制作。"
     };
   }
 
@@ -177,7 +177,7 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct, res
       type: "research",
       status: "success",
       creditCost: 0,
-      message: `已将 Ozon 市场商品加入商品池：${product.title}`,
+      message: `已将 Ozon 市场商品加入商品制作：${product.title}`,
       metadata: {
         source: "apify_ozon_market",
         externalId: product.externalId,
@@ -199,7 +199,7 @@ export async function addOzonMarketProductToPool(product: OzonMarketProduct, res
     productId: pooledProduct.id,
     addedCount: 1,
     message: existing
-      ? "已加入商品池"
-      : "已加入商品池"
+      ? "已加入商品制作"
+      : "已加入商品制作"
   };
 }

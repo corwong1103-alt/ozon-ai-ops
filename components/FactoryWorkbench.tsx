@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles, ImageIcon, Languages, FileText, Tags,
-  Globe, Save, Search, ArrowLeft, Wand2
+  Globe, Save, Search, Wand2, Rocket
 } from "lucide-react";
 import { ReliableProductImage } from "@/components/ReliableProductImage";
 import { imageList } from "@/lib/product-images";
@@ -20,6 +20,8 @@ type Product = {
   status: string;
   source: string;
 };
+
+const DEFAULT_NEGATIVE_PROMPT = "blurry, distorted text, deformed logos, low resolution, watermark, extra objects, text overlay";
 
 export function FactoryWorkbench({ product }: { product: Product }) {
   const router = useRouter();
@@ -37,6 +39,8 @@ export function FactoryWorkbench({ product }: { product: Product }) {
   const [generatedRuTitle, setGeneratedRuTitle] = useState("");
   const [generatedEnTitle, setGeneratedEnTitle] = useState("");
   const [imagePrompt, setImagePrompt] = useState("");
+  const [imageStrength, setImageStrength] = useState(0.35);
+  const [negativePrompt, setNegativePrompt] = useState(DEFAULT_NEGATIVE_PROMPT);
   const [inferredPrompt, setInferredPrompt] = useState("");
   const [inferImageUrl, setInferImageUrl] = useState("");
   const [generatedImageUrl, setGeneratedImageUrl] = useState("");
@@ -92,14 +96,55 @@ export function FactoryWorkbench({ product }: { product: Product }) {
   }, [title, description, product, images, toast, router]);
 
   const sourceLabel = product.source === "source_1688" ? "1688" : product.source === "ozon_market" ? "Ozon Market" : product.source === "ozon" ? "Ozon 店铺" : "手动";
+  const imagePromptBase = `Product: ${title}\nDescription: ${description}\nKeep the original product identity, proportions, colors, material, packaging, and label layout.`;
+  const imageActions = [
+    {
+      key: "img_optimize",
+      label: "优化主图",
+      strength: 0.35,
+      prompt: `Create a realistic Ozon ecommerce main image.\n${imagePromptBase}\nEnvironment: pure white background, product centered, clean tabletop shadow.\nStyle: professional product photography, sharp focus, natural light.`
+    },
+    {
+      key: "img_bg",
+      label: "替换背景",
+      strength: 0.4,
+      prompt: `Create a clean ecommerce background replacement.\n${imagePromptBase}\nEnvironment: light premium studio background, subtle realistic shadow.\nStyle: commercial product photography, no text overlay.`
+    },
+    {
+      key: "img_model",
+      label: "生成模特图",
+      strength: 0.55,
+      prompt: `Create a realistic model usage image for Russian ecommerce buyers.\n${imagePromptBase}\nEnvironment: natural lifestyle setting with the product clearly visible.\nStyle: credible everyday photography, correct scale, natural lighting.`
+    },
+    {
+      key: "img_scene",
+      label: "生成场景图",
+      strength: 0.55,
+      prompt: `Create a realistic product usage scene.\n${imagePromptBase}\nEnvironment: modern home usage scene, simple supporting context.\nStyle: lifestyle ecommerce photography, product remains the visual focus.`
+    }
+  ];
+
+  async function generateImageFromPrompt(action: string, prompt: string, strength: number) {
+    setImagePrompt(prompt);
+    setImageStrength(strength);
+    const data = await callAi(action, {
+      mode: "image",
+      prompt,
+      referenceImage: referenceImage || undefined,
+      strength,
+      negativePrompt
+    });
+    if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
+  }
 
   return (
-    <div className="flex items-start gap-4 lg:flex-row flex-col">
+    <div className="pb-24">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
       {/* ── LEFT: Raw Product ── */}
-      <div className="w-full lg:w-[380px] lg:sticky lg:top-20 shrink-0 space-y-4">
+      <div className="w-full space-y-4 xl:sticky xl:top-24">
         <div className="rounded-xl border border-clay bg-white p-4">
           <div className="mb-3 flex items-center gap-2">
-            <span className="rounded-full bg-rail px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-steel">{sourceLabel}</span>
+            <span className="rounded-full bg-rail px-2 py-0.5 text-[10px] font-semibold text-steel">{sourceLabel}</span>
             <span className="text-xs text-steel">{images.length} 张图</span>
           </div>
 
@@ -131,34 +176,43 @@ export function FactoryWorkbench({ product }: { product: Product }) {
 
           <h2 className="text-sm font-semibold leading-snug text-earth">{title}</h2>
           <p className="mt-2 text-xs leading-relaxed text-steel line-clamp-4">{description}</p>
-          <div className="mt-3 flex items-center justify-between border-t border-clay pt-3">
-            <span className="text-base font-bold text-earth">¥{Number(product.price).toFixed(2)}</span>
-            <span className="text-xs text-steel">{product.currency}</span>
+          <div className="mt-4 grid gap-2 border-t border-clay pt-3 text-xs">
+            <div className="flex justify-between gap-3">
+              <span className="text-steel">价格</span>
+              <strong className="text-earth">¥{Number(product.price).toFixed(2)} {product.currency}</strong>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-steel">SKU</span>
+              <strong className="text-earth">待确认</strong>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-steel">供应商</span>
+              <strong className="text-earth">{sourceLabel}</strong>
+            </div>
           </div>
-        </div>
-
-        {/* Quick actions */}
-        <div className="space-y-2">
-          <button onClick={handleSave} disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2">
-            <Save size={15} />
-            {saving ? "保存中…" : "保存草稿"}
-          </button>
-          <button onClick={() => router.push("/factory/drafts")} className="btn-secondary w-full flex items-center justify-center gap-2 text-xs">
-            <FileText size={14} />
-            查看草稿箱
-          </button>
         </div>
       </div>
 
       {/* ── RIGHT: AI Workbench ── */}
       <div className="flex-1 min-w-0 space-y-4">
-        {/* Panel Tabs */}
-        <div className="flex items-center gap-1 rounded-lg bg-rail/60 p-1 w-fit">
+        <div className="rounded-xl border border-clay bg-white p-5">
+          <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+            <div>
+              <p className="section-kicker">AI Workspace</p>
+              <h3 className="mt-1 text-2xl font-semibold tracking-tight text-earth">统一制作商品资料</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-steel">标题、描述、翻译、图片、属性、SEO 和价格建议都在这里完成。每次只选择一个动作。</p>
+            </div>
+            <button className="btn-primary text-xs" onClick={() => setActivePanel("batch")} type="button">
+              <Sparkles size={13} /> 一键优化
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 rounded-lg bg-rail/60 p-1 w-fit">
           {([
-            { key: "copy", label: "AI 文案", icon: FileText },
-            { key: "image", label: "AI 图片", icon: ImageIcon },
-            { key: "infer", label: "图片反推", icon: Wand2 },
-            { key: "batch", label: "批量处理", icon: Sparkles },
+            { key: "copy", label: "标题与描述", icon: FileText },
+            { key: "image", label: "商品图片", icon: ImageIcon },
+            { key: "infer", label: "图片 Prompt", icon: Wand2 },
+            { key: "batch", label: "一键优化", icon: Sparkles },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -171,48 +225,49 @@ export function FactoryWorkbench({ product }: { product: Product }) {
               {tab.label}
             </button>
           ))}
+          </div>
         </div>
 
         {/* Panel: AI Copy */}
         {activePanel === "copy" && (
           <div className="space-y-3 rounded-xl border border-clay bg-white p-5">
-            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Languages size={15} className="text-accent" />AI 文案生成</h3>
+            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Languages size={15} className="text-accent" />标题、描述与翻译</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className="btn-secondary text-xs" onClick={async () => {
                 const data = await callAi("translate_title", { mode: "text", prompt: `生成一个优化的俄语商品标题：${title}` });
                 if (data?.text) setGeneratedTitle(data.text);
               }} disabled={loading === "translate_title"}>
-                <Languages size={13} /> 生成标题
+                <Languages size={13} /> 优化标题
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
                 const data = await callAi("translate_desc", { mode: "text", prompt: `生成详细的俄语商品描述，含卖点：${description}` });
                 if (data?.text) setGeneratedDesc(data.text);
               }} disabled={loading === "translate_desc"}>
-                <FileText size={13} /> 生成描述
+                <FileText size={13} /> 优化描述
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
                 const data = await callAi("translate_selling", { mode: "text", prompt: `提取商品核心卖点（3-5点俄语）：${title} ${description}` });
                 if (data?.text) setGeneratedSeo(data.text);
               }} disabled={loading === "translate_selling"}>
-                <Tags size={13} /> 生成卖点
+                <Tags size={13} /> 优化属性
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
                 const data = await callAi("translate_seo", { mode: "text", prompt: `生成5-10个俄语SEO关键词：${title}` });
                 if (data?.text) setGeneratedSeo(data.text);
               }} disabled={loading === "translate_seo"}>
-                <Search size={13} /> 生成SEO关键词
+                <Search size={13} /> 生成SEO
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
                 const data = await callAi("translate_ru", { mode: "text", prompt: `翻译为俄语：${title}` });
                 if (data?.text) setGeneratedRuTitle(data.text);
               }} disabled={loading === "translate_ru"}>
-                <Globe size={13} /> 生成俄文版本
+                <Globe size={13} /> 翻译俄语
               </button>
               <button className="btn-secondary text-xs" onClick={async () => {
                 const data = await callAi("translate_en", { mode: "text", prompt: `Translate to English: ${title}` });
                 if (data?.text) setGeneratedEnTitle(data.text);
               }} disabled={loading === "translate_en"}>
-                <Globe size={13} /> 生成英文版本
+                <Globe size={13} /> 价格建议
               </button>
             </div>
 
@@ -232,7 +287,7 @@ export function FactoryWorkbench({ product }: { product: Product }) {
                     toast("success", "已应用 AI 生成内容");
                   }}
                 >
-                  应用 AI 结果到商品
+                  应用到商品
                 </button>
               </div>
             )}
@@ -242,44 +297,66 @@ export function FactoryWorkbench({ product }: { product: Product }) {
         {/* Panel: AI Image */}
         {activePanel === "image" && (
           <div className="space-y-3 rounded-xl border border-clay bg-white p-5">
-            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><ImageIcon size={15} className="text-accent" />AI 图片处理</h3>
+            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><ImageIcon size={15} className="text-accent" />生成图片</h3>
+            <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)]">
+              <div className="rounded-lg border border-clay bg-rail/30 p-3">
+                <p className="mb-2 text-[10px] font-bold uppercase text-steel">参考图</p>
+                {referenceImage ? (
+                  <img src={referenceImage} alt="Reference product" className="aspect-square w-full rounded-md object-cover" />
+                ) : (
+                  <div className="grid aspect-square w-full place-items-center rounded-md bg-white text-xs text-steel">暂无参考图</div>
+                )}
+              </div>
+              <div className="space-y-3 rounded-lg border border-clay bg-rail/30 p-3">
+                <label className="block text-xs font-semibold text-steel">
+                  保留原图强度 {imageStrength.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="0.8"
+                    step="0.05"
+                    value={imageStrength}
+                    onChange={(event) => setImageStrength(Number(event.target.value))}
+                    className="mt-2 w-full"
+                  />
+                </label>
+                <label className="block text-xs font-semibold text-steel">
+                  负面词
+                  <textarea
+                    className="field mt-1 min-h-16 text-xs"
+                    value={negativePrompt}
+                    onChange={(event) => setNegativePrompt(event.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_optimize", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n优化这张电商产品图，保持原商品不变，优化背景和光线：${title}`, referenceImage: referenceImage || undefined });
-                if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
-              }} disabled={loading === "img_optimize"}>
-                <ImageIcon size={13} /> 原图优化
-              </button>
-              <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_bg", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n替换这张产品图的背景为纯白色电商背景，保持产品清晰：${title}`, referenceImage: referenceImage || undefined });
-                if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
-              }} disabled={loading === "img_bg"}>
-                <ImageIcon size={13} /> 背景替换
-              </button>
-              <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_model", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张俄罗斯模特展示${title}的电商图，自然光线，专业摄影`, referenceImage: referenceImage || undefined });
-                if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
-              }} disabled={loading === "img_model"}>
-                <ImageIcon size={13} /> AI 模特图
-              </button>
-              <button className="btn-secondary text-xs" onClick={async () => {
-                const data = await callAi("img_scene", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n生成一张${title}的场景使用图，居家环境，柔和光线`, referenceImage: referenceImage || undefined });
-                if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
-              }} disabled={loading === "img_scene"}>
-                <ImageIcon size={13} /> AI 场景图
-              </button>
-              <button className="btn-secondary text-xs sm:col-span-2" onClick={async () => {
-                const data = await callAi("img_main", { mode: "image", prompt: `参考图片URL: ${referenceImage}\n重新生成一张 Ozon 电商主图：${title}`, referenceImage: referenceImage || undefined });
-                if (data?.imageUrl) setGeneratedImageUrl(data.imageUrl);
-              }} disabled={loading === "img_main"}>
-                <ImageIcon size={13} /> 重新生成主图
+              {imageActions.map((action) => (
+                <button
+                  key={action.key}
+                  className="btn-secondary text-xs"
+                  onClick={() => generateImageFromPrompt(action.key, action.prompt, action.strength)}
+                  disabled={loading === action.key || !referenceImage}
+                >
+                  <ImageIcon size={13} /> {action.label}
+                </button>
+              ))}
+              <button
+                className="btn-secondary text-xs sm:col-span-2"
+                onClick={() => generateImageFromPrompt("img_custom", imagePrompt || imageActions[0].prompt, imageStrength)}
+                disabled={loading === "img_custom" || !referenceImage}
+              >
+                <ImageIcon size={13} /> 按当前强度重新生成
               </button>
             </div>
 
             {generatedImageUrl && (
               <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 p-4">
-                <p className="text-[10px] font-bold uppercase text-steel mb-2">AI 生成图</p>
-                <img src={generatedImageUrl} alt="AI generated" className="w-full rounded-lg" />
+                <p className="text-[10px] font-bold uppercase text-steel mb-2">原图 / AI 生成图</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {referenceImage && <img src={referenceImage} alt="Reference product" className="w-full rounded-lg object-contain" />}
+                  <img src={generatedImageUrl} alt="AI generated" className="w-full rounded-lg object-contain" />
+                </div>
                 <button className="btn-primary text-xs mt-3" onClick={async () => {
                   try {
                     await fetch(`/api/products/${product.id}/add-image`, {
@@ -307,7 +384,7 @@ export function FactoryWorkbench({ product }: { product: Product }) {
         {/* Panel: Image Infer */}
         {activePanel === "infer" && (
           <div className="space-y-3 rounded-xl border border-clay bg-white p-5">
-            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Wand2 size={15} className="text-accent" />图片反推 Prompt</h3>
+            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Wand2 size={15} className="text-accent" />图片 Prompt</h3>
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-clay bg-rail/40 p-3">
@@ -353,7 +430,13 @@ export function FactoryWorkbench({ product }: { product: Product }) {
                   <p className="text-[10px] font-bold uppercase text-steel mb-1">生成的 Prompt</p>
                   <p className="text-xs text-earth whitespace-pre-wrap">{inferredPrompt}</p>
                   <button className="btn-primary text-xs mt-3" onClick={async () => {
-                    const data = await callAi("infer_image", { mode: "image", prompt: inferredPrompt, referenceImage: referenceImage || undefined });
+                    const data = await callAi("infer_image", {
+                      mode: "image",
+                      prompt: inferredPrompt,
+                      referenceImage: referenceImage || undefined,
+                      strength: imageStrength,
+                      negativePrompt
+                    });
                     if (data?.imageUrl) { setGeneratedImageUrl(data.imageUrl); setActivePanel("image"); }
                   }}>用此 Prompt 生图</button>
                 </div>
@@ -372,19 +455,33 @@ export function FactoryWorkbench({ product }: { product: Product }) {
         {/* Panel: Batch */}
         {activePanel === "batch" && (
           <div className="space-y-3 rounded-xl border border-clay bg-white p-5">
-            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Sparkles size={15} className="text-accent" />批量处理</h3>
-            <p className="text-xs text-steel">对当前商品执行全部 AI 优化流程</p>
+            <h3 className="text-sm font-semibold text-earth flex items-center gap-2"><Sparkles size={15} className="text-accent" />一键优化</h3>
+            <p className="text-xs text-steel">对当前商品执行完整 AI Workspace 流程。</p>
             <div className="grid gap-2">
               <button className="btn-primary text-xs" disabled>
-                <Sparkles size={13} /> 一键优化全部图片
+                <Sparkles size={13} /> 一键优化图片
               </button>
               <button className="btn-primary text-xs" disabled>
-                <FileText size={13} /> 一键优化全部文案
+                <FileText size={13} /> 一键优化文案
               </button>
             </div>
-            <p className="text-[10px] text-steel/60">批量功能开发中，请先用上方 AI 面板单步操作</p>
+            <p className="text-[10px] text-steel/60">批量能力开发中，请先用上方 AI Workspace 单步操作。</p>
           </div>
         )}
+      </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-clay bg-sand/90 px-4 py-3 backdrop-blur-xl lg:left-60">
+        <div className="mx-auto flex max-w-6xl items-center justify-end gap-2">
+          <button onClick={handleSave} disabled={saving} className="btn-secondary">
+            <Save size={15} />
+            {saving ? "保存中…" : "保存草稿"}
+          </button>
+          <button onClick={() => router.push(`/products/${product.id}`)} className="btn-primary">
+            <Rocket size={15} />
+            立即发布
+          </button>
+        </div>
       </div>
     </div>
   );

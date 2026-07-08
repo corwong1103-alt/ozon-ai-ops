@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE = "ozon_ops_session";
 const SESSION_DAYS = 30;
+const MAX_ACTIVE_SESSIONS = 5;
 
 function shouldUseSecureCookie() {
   const appUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
@@ -37,6 +38,13 @@ export async function createSession(userId: string) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
 
+  await prisma.session.deleteMany({
+    where: {
+      userId,
+      expiresAt: { lt: new Date() }
+    }
+  });
+
   await prisma.session.create({
     data: {
       userId,
@@ -45,9 +53,21 @@ export async function createSession(userId: string) {
     }
   });
 
+  const staleSessions = await prisma.session.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    skip: MAX_ACTIVE_SESSIONS,
+    select: { id: true }
+  });
+  if (staleSessions.length > 0) {
+    await prisma.session.deleteMany({
+      where: { id: { in: staleSessions.map((session) => session.id) } }
+    });
+  }
+
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookie(),
     path: "/",
     expires: expiresAt

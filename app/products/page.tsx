@@ -67,10 +67,10 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
   const draftCount = products.filter((product) => ["discovered", "favorited", "in_product_center"].includes(product.status)).length;
 
   return (
-    <AppShell title="商品池" eyebrow="真实货盘" user={user}>
+    <AppShell title="商品制作" eyebrow="真实商品列表" user={user}>
       <section className="product-pool-console">
         <div>
-          <p className="section-kicker">商品池</p>
+          <p className="section-kicker">Products</p>
           <h3>选品进入后，先看可操作信号。</h3>
         </div>
         <div className="pool-summary-strip">
@@ -97,7 +97,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
         <section className="pool-action-bar border-green-200 bg-green-50 text-green-900">
           <div>
             <strong>刚加入 {joinedCount} 个来自 {rawSource === "ozon" || rawSource === "store" ? "Ozon 店铺同步" : "Ozon 市场调研"} 的商品。</strong>
-            <span>现在可以从下方点击“下一步”继续处理。</span>
+            <span>现在可以从下方点击“下一步”继续制作。</span>
           </div>
         </section>
       )}
@@ -105,11 +105,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
       <section className="pool-action-bar">
         <div>
           <strong>优先处理：</strong>
-          <span>有真实图、有价格、有 Offer ID 的 Ozon 商品。无图商品不会补假图，先回到调研或采集源补真实链接。</span>
+          <span>有真实图、有价格、有 Offer ID 的 Ozon 商品。无图商品不会补假图，先回到发现商品补真实链接。</span>
         </div>
         <div className="pool-action-links">
-          <Link href="/research/ozon">Ozon 调研</Link>
-          <Link href="/collector">1688 采集</Link>
+          <Link href="/research/ozon">Ozon</Link>
+          <Link href="/research/1688">1688</Link>
         </div>
       </section>
 
@@ -123,7 +123,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
 
       <div className="product-pool-layout">
         <section className="pool-product-list">
-          {products.length === 0 && <p className="pool-empty">暂无商品，先从 Ozon 调研或 1688 采集加入一个真实来源商品。</p>}
+          {products.length === 0 && <p className="pool-empty">暂无商品，先从发现商品加入一个真实来源商品。</p>}
           {products.map((product) => {
             const images = imageList(product.images);
             const offerId = readDescriptionValue(product.description, "Offer ID");
@@ -186,7 +186,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
             <p className="section-kicker">快速补录</p>
             <h3>手动商品</h3>
           </div>
-          <p>主流程建议从调研/采集加入；这里用于临时录入已确认的真实链接。</p>
+          <p>主流程建议从发现商品加入；这里用于临时录入已确认的真实链接。</p>
           <div className="space-y-3">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold">来源</span>
@@ -217,7 +217,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: Re
               </span>
             </label>
           </div>
-          <button className="btn-primary w-full">保存到商品池</button>
+          <button className="btn-primary w-full">保存并制作</button>
         </form>
       </div>
     </AppShell>

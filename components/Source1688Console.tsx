@@ -274,11 +274,11 @@ export function Source1688Console({
         </div>
       )}
 
-      {/* ── 导入后引导：进入商品池做 AI 优化 ── */}
+      {/* ── 导入后引导：进入商品制作 ── */}
       {lastImportedProductId && (
         <div className="flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm">
           <div className="text-emerald-900">
-            <p className="font-medium">已导入商品池。</p>
+            <p className="font-medium">已加入商品制作。</p>
             <p className="mt-0.5 text-emerald-800">下一步可进入商品详情生成 Ozon Listing（标题/描述/属性/SEO）。</p>
           </div>
           <Link
@@ -293,7 +293,7 @@ export function Source1688Console({
       {/* ── 空状态 ── */}
       {products.length === 0 && !searching && configured && !error && (
         <div className="rounded-lg border border-dashed border-clay p-10 text-center text-sm text-steel">
-          输入中文关键词搜索真实 1688 商品。结果可直接导入商品池，再用 AI 生成 Ozon 上架资料。
+          输入中文关键词搜索真实 1688 商品。结果可直接加入商品制作，再生成 Ozon 上架资料。
         </div>
       )}
     </div>

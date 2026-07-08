@@ -22,7 +22,7 @@ export default async function AiStudioPage() {
         <div className="dashboard-topline">
           <div>
             <p className="section-kicker">批量 AI 工具</p>
-            <h3>建议先从商品池选择商品；这里只保留批量处理入口。</h3>
+            <h3>建议先从商品制作选择商品；这里只保留批量处理入口。</h3>
           </div>
           <div className="dashboard-user-strip">
             <span>图片额度 {imageCredits}</span>

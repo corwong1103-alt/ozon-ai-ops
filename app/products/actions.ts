@@ -16,8 +16,10 @@ import {
 } from "@/lib/product-images";
 import {
   buildImageTextTranslationPrompt,
+  buildMainImagePrompt,
   buildProductImagePrompt,
-  buildProductTranslationPrompt
+  buildProductTranslationPrompt,
+  NEGATIVE_PROMPT
 } from "@/lib/ai/prompts";
 import { runBaseTranslationTask, runCreditAiTask } from "@/lib/services/ai";
 import { uploadProductToOzon } from "@/lib/services/ozon";
@@ -164,9 +166,9 @@ export async function translateProduct(productId: string) {
 export async function addToProductPool(productId: string) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
-  if (!product) return { ok: false, message: "未找到商品，无法入池。" };
+  if (!product) return { ok: false, message: "未找到商品，无法加入制作。" };
   if (!["discovered", "favorited"].includes(product.status)) {
-    return { ok: false, message: "当前商品状态不需要加入商品池。" };
+    return { ok: false, message: "当前商品已经在制作流程中。" };
   }
 
   await prisma.product.update({ where: { id: product.id }, data: { status: "in_product_center" } });
@@ -177,21 +179,21 @@ export async function addToProductPool(productId: string) {
       type: "research",
       status: "success",
       creditCost: 0,
-      message: `商品已加入商品中心：${product.title}`
+      message: `商品已加入商品制作：${product.title}`
     }
   });
   revalidatePath(`/products/${productId}`);
   revalidatePath("/products");
   revalidatePath("/dashboard");
-  return { ok: true, message: "商品已加入商品中心，可开始 AI 优化。" };
+  return { ok: true, message: "商品已加入商品制作，可以继续制作。" };
 }
 
 export async function optimizeProductMainFlow(productId: string) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
-  if (!product) return { ok: false, message: "未找到商品，无法开始 AI 优化。" };
+  if (!product) return { ok: false, message: "未找到商品，无法继续制作。" };
   if (!["in_product_center", "optimizing"].includes(product.status)) {
-    return { ok: false, message: "只有商品中心内的商品可以开始 AI 优化。" };
+    return { ok: false, message: "只有制作中的商品可以继续制作。" };
   }
 
   await prisma.product.update({ where: { id: product.id }, data: { status: "optimizing" } });
@@ -218,7 +220,7 @@ export async function optimizeProductMainFlow(productId: string) {
       type: "translate",
       status: "success",
       creditCost: 0,
-      message: "主流程 AI 优化已完成，等待人工确认。",
+      message: "AI Workspace 已完成，等待人工确认。",
       metadata: { optimized }
     }
   });
@@ -226,14 +228,14 @@ export async function optimizeProductMainFlow(productId: string) {
   revalidatePath(`/products/${productId}`);
   revalidatePath("/products");
   revalidatePath("/dashboard");
-  return { ok: true, message: "AI 优化已完成，请人工确认。" };
+  return { ok: true, message: "商品制作完成，请人工确认。" };
 }
 
 export async function confirmProductReady(productId: string) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
   if (!product) return { ok: false, message: "未找到商品，无法确认。" };
-  if (product.status !== "optimized") return { ok: false, message: "只有已优化商品可以人工确认。" };
+  if (product.status !== "optimized") return { ok: false, message: "只有待确认商品可以人工确认。" };
 
   await prisma.product.update({ where: { id: product.id }, data: { status: "ready_to_publish" } });
   await prisma.taskLog.create({
@@ -249,7 +251,7 @@ export async function confirmProductReady(productId: string) {
   revalidatePath(`/products/${productId}`);
   revalidatePath("/products");
   revalidatePath("/dashboard");
-  return { ok: true, message: "人工确认完成，下一步发布到 Ozon。" };
+  return { ok: true, message: "确认完成，下一步发布商品。" };
 }
 
 export async function generatePromotionDraft(productId: string) {
@@ -327,6 +329,11 @@ export async function generateProductImage(productId: string) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
   if (!product) return { ok: false, message: "未找到商品，无法生成 AI 商品图。" };
+  const preset = buildMainImagePrompt({
+    title: product.title,
+    description: product.description,
+    price: product.price.toString()
+  });
 
   const task = await runCreditAiTask({
     userId: user.id,
@@ -338,6 +345,9 @@ export async function generateProductImage(productId: string) {
       description: product.description,
       price: product.price.toString()
     }),
+    referenceImage: imageList(product.images)[0],
+    strength: preset.strength,
+    negativePrompt: NEGATIVE_PROMPT,
     onSuccess: () => prisma.product.update({ where: { id: productId }, data: { status: "optimizing" } })
   });
   revalidatePath(`/products/${productId}`);
@@ -348,7 +358,7 @@ export async function generateProductImage(productId: string) {
   };
 }
 
-export async function generateProductImageFromPrompt(productId: string, prompt: string) {
+export async function generateProductImageFromPrompt(productId: string, prompt: string, referenceImageUrl?: string, strength?: number, negativePrompt?: string) {
   const user = await requireApprovedUser();
   const product = await prisma.product.findFirst({ where: { id: productId, userId: user.id } });
   if (!product) return { ok: false, message: "未找到商品，无法生成 AI 商品图。" };
@@ -364,6 +374,9 @@ export async function generateProductImageFromPrompt(productId: string, prompt: 
     kind: "image",
     message: `AI 商品图按提示词生成：${product.title}`,
     prompt: cleanPrompt,
+    referenceImage: referenceImageUrl || imageList(product.images)[0],
+    strength,
+    negativePrompt,
     onSuccess: () => prisma.product.update({ where: { id: productId }, data: { status: "optimizing" } })
   });
   revalidatePath(`/products/${productId}`);
